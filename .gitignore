@@ -1,0 +1,11 @@
+# assessment output (keep the dir, ignore contents)
+loot/*
+!loot/.gitkeep
+*.log
+# local report exports
+assessment-*.md
+# editor / OS
+.vscode/
+.idea/
+.DS_Store
+*.swp

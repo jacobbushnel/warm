@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>WARM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <span class="eyebrow">Web App Rapid Methodology · copy-only</span>
+      <h1>WARM</h1>
+    </div>
+    <div class="top-actions">
+      <span class="count" id="count">0 / 0</span>
+      <div class="bar"><i id="barfill"></i></div>
+      <button class="ghost" id="export" type="button">Export report</button>
+      <button class="ghost" id="theme" type="button">Theme: system</button>
+      <button class="ghost" id="reset" type="button">Reset</button>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="scope">
+    <h2>Scope &amp; variables</h2>
+    <p class="hint">These fill every command live. Set the target to scope your commands; out-of-scope active targets are flagged, not blocked.</p>
+    <div id="scope-fields"></div>
+  </aside>
+
+  <main class="main">
+    <p class="lede">A scoped, copy-first assessment methodology. Tick items as you work, keep notes per phase,
+      and export a Markdown report. Commands template from the Scope panel — unfilled <code>{variables}</code>
+      are highlighted. Nothing runs from this page; every command is yours to copy and run in your terminal.</p>
+
+    <div id="phases"></div>
+
+    <div class="tree">
+      <h2>SSRF escalation — decision tree</h2>
+      <p class="sub">The exact path through the CV-upload / create-admin labs, as a flow.</p>
+      <div class="step"><div class="q">1 · Does a feature fetch a URL you control?</div><div class="a">Webhook, import, avatar/CV, renderer, link preview. Confirm with a listener hit. No hit → not SSRF.</div></div>
+      <div class="step"><div class="q">2 · What's the fetcher? (read the User-Agent)</div><div class="a"><code>curl</code> → gopher + redirects. <code>python-requests</code> → no gopher. Headless browser → <code>file://</code>, rendered internal pages.</div></div>
+      <div class="step"><div class="q">3 · Can you reach internal services?</div><div class="a">Denylist on <code>localhost</code>/<code>127.0.0.1</code>? Bypass with <code>0.0.0.0</code>, <code>0</code>, <code>[::1]</code>, <code>127.0.0.2</code>, <code>2130706433</code>. Confirm against an internal-only route.</div></div>
+      <div class="step"><div class="q">4 · Is the target endpoint a plain GET?</div><div class="a">Yes → point the fetch at it. No (needs POST + body) → step 5.</div></div>
+      <div class="step"><div class="q">5 · Forge the POST with gopher</div><div class="a"><code>gopher://127.0.0.1:80/_</code> + raw request. <code>Content-Length</code> exact, <code>%0d%0a</code> CRLFs, blank line before body.</div></div>
+      <div class="step"><div class="q">6 · Is your payload inside a form field?</div><div class="a">Yes (<code>cv=gopher://…</code>) → decoded twice. Double-encode: <code>%</code>→<code>%25</code>, <code>&amp;</code>→<code>%26</code>, inner <code>=</code>→<code>%3D</code>.</div></div>
+      <div class="step"><div class="q">7 · Verify out-of-band</div><div class="a">gopher is blind — don't trust a reflected <code>status:ok</code>. Confirm on a public endpoint (log in as the admin you created).</div></div>
+    </div>
+  </main>
+</div>
+
+<footer>
+  Copy-only methodology console · state saved in this browser · adapt to your rules of engagement — only test what you're authorized to test
+</footer>
+
+<script src="assets/commands.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
