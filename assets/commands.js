@@ -28,13 +28,13 @@ window.METHODOLOGY = {
           tell: "Headers, cookie names, error-page style tell you the framework — which decides which bugs matter.",
           cmds: [
             { tool: "whatweb", cmd: "whatweb -a 3 {target_url}" },
-            { tool: "httpx",   cmd: "httpx -u {target_url} -title -tech-detect -status-code -server -ip" },
+            { tool: "httpx-toolkit", cmd: "httpx-toolkit -u {target_url} -title -tech-detect -status-code -web-server -ip" },
             { tool: "curl",    cmd: "curl -s -I {target_url}/" }
           ] },
         { label: "Content discovery / forced browsing",
           tell: "Find /api, /admin, /private, backups, .git, .env, docs. Most labs are won here.",
           cmds: [
-            { tool: "ffuf",        cmd: "ffuf -u {target_url}/FUZZ -w {wordlist} -mc all -fc 404 -t 50" },
+            { tool: "ffuf",        cmd: "ffuf -u {target_url}/FUZZ -w {wordlist} -fc 404 -c -recursion -t 50" },
             { tool: "feroxbuster", cmd: "feroxbuster -u {target_url} -w {wordlist} -x php,txt,bak,zip" }
           ] },
         { label: "Read every client-side JS file",
