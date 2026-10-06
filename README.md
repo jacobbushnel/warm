@@ -10,14 +10,27 @@ correctly scoped to your target, tester IP, and listener port.
 
 ## Features
 
-- **Scope → variables**: `target`, `tester_ip`, `tester_port` (listener), plus `wordlist`, `ports`,
-  `cookie`, `scheme`. They fill every command live; unfilled `{variables}` are highlighted.
-- **Warn-but-allow scope guard**: set your authorized targets; an *active target* outside that list
-  is flagged (not blocked).
-- **Per-command Copy** with an `⚠` if the copied command still has an unfilled variable.
-- **Checklist + progress** per phase, saved in your browser.
-- **Findings notes** per phase → **Export report** as Markdown.
-- **SSRF escalation decision tree** baked in (the CV-upload / create-admin lab path).
+Four tabs, all copy-only:
+
+- **Methodology** — the 9-phase workflow with per-item *tells*, discovery/confirmation tools,
+  a checklist + progress bar, per-phase findings notes, and the SSRF escalation decision tree.
+- **Reverse Shells** — listeners (nc / rlwrap / socat / pwncat) + a TTY-upgrade reminder, and
+  ~19 one-liners (bash, sh, netcat, python, php, perl, ruby, node.js, powershell, socat, lua,
+  telnet) with your tester IP/port filled in. Filter by language.
+- **Dork Search** — build a `site:` query across curated pentest references (HackTricks,
+  PayloadsAllTheThings, PentestMonkey, GTFOBins, LOLBAS, WADComs, OWASP, PortSwigger, ired.team,
+  revshells, Exploit-DB, …). Toggle which sites to include; Google / DuckDuckGo / Bing / Startpage.
+- **Favorites** — save any command with `☆`, add custom ones, and export/import as JSON so your
+  set follows you between browsers/machines. Saved commands re-template live, so they stay scoped.
+
+**Scope → variables** (fill every command live; unfilled `{variables}` are highlighted):
+`target_url`, `target_ip`, derived `{target_host}`, `tester_ip`, `tester_port` (listener),
+`wordlist`, `ports`, `cookie`.
+
+- **Warn-but-allow scope guard**: set an authorized hosts/CIDRs list; a Target URL host or IP
+  outside it is flagged (IPv4 + CIDR aware), never blocked.
+- **Per-command Copy** with a `⚠` if the copied command still has an unfilled variable.
+- **Export report** as Markdown; checklist, notes, scope, and favorites persist in your browser.
 - Theme follows your system; toggle light/dark in the header.
 
 ## Run
@@ -44,10 +57,11 @@ isn't a shell command (it renders without a Copy button).
 
 ```
 warm/
-├─ index.html            # app shell + SSRF decision tree
+├─ index.html            # app shell: tabs + SSRF decision tree
 ├─ assets/
 │  ├─ commands.js        # the methodology (edit this to extend)
-│  ├─ app.js             # rendering, scoping, copy, report export
+│  ├─ data.js            # reverse shells, dork sites, listeners
+│  ├─ app.js             # rendering, scoping, copy, favorites, report export
 │  └─ styles.css         # theme tokens + layout
 ├─ serve.sh              # ./serve.sh [port]  (binds 127.0.0.1)
 ├─ loot/                 # suggested output dir for your tool runs (gitignored)
