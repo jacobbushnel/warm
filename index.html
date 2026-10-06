@@ -30,36 +30,112 @@
 <div class="layout">
   <aside class="scope">
     <h2>Scope &amp; variables</h2>
-    <p class="hint">These fill every command live. Set the target to scope your commands; out-of-scope active targets are flagged, not blocked.</p>
+    <p class="hint">These fill every command live. Set the Target URL + IP; an authorized-scope list (optional) flags out-of-scope targets without blocking.</p>
     <div id="scope-fields"></div>
   </aside>
 
   <main class="main">
-    <p class="lede">A scoped, copy-first assessment methodology. Tick items as you work, keep notes per phase,
-      and export a Markdown report. Commands template from the Scope panel — unfilled <code>{variables}</code>
-      are highlighted. Nothing runs from this page; every command is yours to copy and run in your terminal.</p>
+    <nav class="tabs">
+      <button class="tab active" data-tab="methodology" type="button">Methodology</button>
+      <button class="tab" data-tab="revshells" type="button">Reverse Shells</button>
+      <button class="tab" data-tab="dorks" type="button">Dork Search</button>
+      <button class="tab" data-tab="favorites" type="button">Favorites <span id="fav-count"></span></button>
+    </nav>
 
-    <div id="phases"></div>
+    <!-- METHODOLOGY -->
+    <section id="tab-methodology">
+      <p class="lede">A scoped, copy-first assessment workflow. Tick items as you work, keep notes per phase,
+        and export a Markdown report. Commands template from the Scope panel — unfilled <code>{variables}</code>
+        are highlighted. Hit <b>☆</b> to save any command to Favorites. Nothing runs from this page.</p>
+      <div id="phases"></div>
 
-    <div class="tree">
-      <h2>SSRF escalation — decision tree</h2>
-      <p class="sub">The exact path through the CV-upload / create-admin labs, as a flow.</p>
-      <div class="step"><div class="q">1 · Does a feature fetch a URL you control?</div><div class="a">Webhook, import, avatar/CV, renderer, link preview. Confirm with a listener hit. No hit → not SSRF.</div></div>
-      <div class="step"><div class="q">2 · What's the fetcher? (read the User-Agent)</div><div class="a"><code>curl</code> → gopher + redirects. <code>python-requests</code> → no gopher. Headless browser → <code>file://</code>, rendered internal pages.</div></div>
-      <div class="step"><div class="q">3 · Can you reach internal services?</div><div class="a">Denylist on <code>localhost</code>/<code>127.0.0.1</code>? Bypass with <code>0.0.0.0</code>, <code>0</code>, <code>[::1]</code>, <code>127.0.0.2</code>, <code>2130706433</code>. Confirm against an internal-only route.</div></div>
-      <div class="step"><div class="q">4 · Is the target endpoint a plain GET?</div><div class="a">Yes → point the fetch at it. No (needs POST + body) → step 5.</div></div>
-      <div class="step"><div class="q">5 · Forge the POST with gopher</div><div class="a"><code>gopher://127.0.0.1:80/_</code> + raw request. <code>Content-Length</code> exact, <code>%0d%0a</code> CRLFs, blank line before body.</div></div>
-      <div class="step"><div class="q">6 · Is your payload inside a form field?</div><div class="a">Yes (<code>cv=gopher://…</code>) → decoded twice. Double-encode: <code>%</code>→<code>%25</code>, <code>&amp;</code>→<code>%26</code>, inner <code>=</code>→<code>%3D</code>.</div></div>
-      <div class="step"><div class="q">7 · Verify out-of-band</div><div class="a">gopher is blind — don't trust a reflected <code>status:ok</code>. Confirm on a public endpoint (log in as the admin you created).</div></div>
-    </div>
+      <div class="tree">
+        <h2>SSRF escalation — decision tree</h2>
+        <p class="sub">The exact path through the CV-upload / create-admin labs, as a flow.</p>
+        <div class="step"><div class="q">1 · Does a feature fetch a URL you control?</div><div class="a">Webhook, import, avatar/CV, renderer, link preview. Confirm with a listener hit. No hit → not SSRF.</div></div>
+        <div class="step"><div class="q">2 · What's the fetcher? (read the User-Agent)</div><div class="a"><code>curl</code> → gopher + redirects. <code>python-requests</code> → no gopher. Headless browser → <code>file://</code>, rendered internal pages.</div></div>
+        <div class="step"><div class="q">3 · Can you reach internal services?</div><div class="a">Denylist on <code>localhost</code>/<code>127.0.0.1</code>? Bypass with <code>0.0.0.0</code>, <code>0</code>, <code>[::1]</code>, <code>127.0.0.2</code>, <code>2130706433</code>. Confirm against an internal-only route.</div></div>
+        <div class="step"><div class="q">4 · Is the target endpoint a plain GET?</div><div class="a">Yes → point the fetch at it. No (needs POST + body) → step 5.</div></div>
+        <div class="step"><div class="q">5 · Forge the POST with gopher</div><div class="a"><code>gopher://127.0.0.1:80/_</code> + raw request. <code>Content-Length</code> exact, <code>%0d%0a</code> CRLFs, blank line before body.</div></div>
+        <div class="step"><div class="q">6 · Is your payload inside a form field?</div><div class="a">Yes (<code>cv=gopher://…</code>) → decoded twice. Double-encode: <code>%</code>→<code>%25</code>, <code>&amp;</code>→<code>%26</code>, inner <code>=</code>→<code>%3D</code>.</div></div>
+        <div class="step"><div class="q">7 · Verify out-of-band</div><div class="a">gopher is blind — don't trust a reflected <code>status:ok</code>. Confirm on a public endpoint (log in as the admin you created).</div></div>
+      </div>
+    </section>
+
+    <!-- REVERSE SHELLS -->
+    <section id="tab-revshells" hidden>
+      <p class="lede">Reverse-shell one-liners with your <code>{tester_ip}</code> / <code>{tester_port}</code> filled in live
+        from the Scope panel. Start a listener first, then copy a shell. For authorized testing only.</p>
+      <div class="panel">
+        <h3>Listeners</h3>
+        <div class="cmds inset" id="listeners"></div>
+        <label class="mini">TTY upgrade</label>
+        <pre class="ttybox" id="tty"></pre>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Reverse shells</h3>
+          <select id="rev-filter" class="select"></select>
+        </div>
+        <div class="cmds inset" id="revshells"></div>
+      </div>
+    </section>
+
+    <!-- DORK SEARCH -->
+    <section id="tab-dorks" hidden>
+      <p class="lede">Search a curated set of web-app pentest references at once with a <code>site:</code> dork.
+        Type a query, pick which sites to include, and open the search in a new tab. Heavy multi-site dorks can
+        trip captchas — narrow the selection or switch engines if that happens.</p>
+      <div class="panel">
+        <div class="dork-controls">
+          <input id="dork-q" type="text" class="dork-q" placeholder="e.g. SSRF gopher bypass  (query is optional)">
+          <select id="dork-engine" class="select"></select>
+          <button id="dork-go" class="ghost pri" type="button">Search selected</button>
+        </div>
+        <div class="dork-sub">
+          <span id="dork-hint" class="dork-hint"></span>
+          <span class="spacer"></span>
+          <button id="dork-all" class="ghost" type="button">All</button>
+          <button id="dork-none" class="ghost" type="button">None</button>
+        </div>
+        <div id="dork-sites" class="sites"></div>
+      </div>
+    </section>
+
+    <!-- FAVORITES -->
+    <section id="tab-favorites" hidden>
+      <p class="lede">Commands you saved with <b>☆</b>, kept in this browser. They re-template from the Scope panel,
+        so a saved command stays correctly scoped. Export to a JSON file to keep a copy on your machine or move it
+        between browsers.</p>
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Saved commands</h3>
+          <div class="fav-io">
+            <button id="fav-export" class="ghost" type="button">Export JSON</button>
+            <label class="ghost filelabel" for="fav-import">Import JSON</label>
+            <input id="fav-import" type="file" accept="application/json,.json" hidden>
+          </div>
+        </div>
+        <div class="cmds inset" id="fav-list"></div>
+      </div>
+      <div class="panel">
+        <h3>Add a custom command</h3>
+        <div class="fav-add">
+          <input id="fav-tool" type="text" class="select" placeholder="label (e.g. my-ffuf)">
+          <textarea id="fav-cmd" class="select" placeholder="command — you can use {target_url} {target_ip} {tester_ip} {tester_port} …"></textarea>
+          <button id="fav-add" class="ghost pri" type="button">Add to favorites</button>
+        </div>
+      </div>
+    </section>
   </main>
 </div>
 
 <footer>
-  Copy-only methodology console · state saved in this browser · adapt to your rules of engagement — only test what you're authorized to test
+  WARM · copy-only methodology console · state saved in this browser · only test what you're authorized to test
 </footer>
 
 <script src="assets/commands.js"></script>
+<script src="assets/data.js"></script>
 <script src="assets/app.js"></script>
 </body>
 </html>

