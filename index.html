@@ -39,6 +39,7 @@
       <button class="tab active" data-tab="methodology" type="button">Methodology</button>
       <button class="tab" data-tab="revshells" type="button">Reverse Shells</button>
       <button class="tab" data-tab="dorks" type="button">Dork Search</button>
+      <button class="tab" data-tab="setup" type="button">Setup</button>
       <button class="tab" data-tab="favorites" type="button">Favorites <span id="fav-count"></span></button>
     </nav>
 
@@ -100,6 +101,13 @@
         </div>
         <div id="dork-sites" class="sites"></div>
       </div>
+    </section>
+
+    <!-- SETUP -->
+    <section id="tab-setup" hidden>
+      <p class="lede">One-time Kali tooling setup — commands grouped by installer. Copy each block into your
+        terminal, top to bottom. apt skips anything already installed; the Go/pipx/git groups cover what apt doesn't.</p>
+      <div id="setup-list"></div>
     </section>
 
     <!-- FAVORITES -->

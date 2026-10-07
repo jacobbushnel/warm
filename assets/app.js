@@ -2,7 +2,8 @@
 (function () {
   "use strict";
   var M = window.METHODOLOGY, SITES = window.DORK_SITES || [], ENGINES = window.DORK_ENGINES || [],
-      REV = window.REVSHELLS || [], LISTENERS = window.LISTENERS || [], TTY = window.TTY_UPGRADE || [];
+      REV = window.REVSHELLS || [], LISTENERS = window.LISTENERS || [], TTY = window.TTY_UPGRADE || [],
+      SETUP = window.SETUP || [];
   var LS = {
     get: function (k, d) { try { var v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
     set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
@@ -199,6 +200,19 @@
   }
   function flashHint(msg) { var h = $("#dork-hint"); h.textContent = msg; h.classList.add("show"); setTimeout(function () { h.classList.remove("show"); }, 2200); }
 
+  // ---- setup ----
+  function buildSetup() {
+    var wrap = $("#setup-list"); if (!wrap) return; wrap.innerHTML = "";
+    SETUP.forEach(function (g) {
+      var panel = el("div", "panel");
+      panel.appendChild(el("h3", null, g.group));
+      if (g.note) { var n = el("p", "setup-note", g.note); panel.appendChild(n); }
+      var cmds = el("div", "cmds inset");
+      (g.cmds || []).forEach(function (c) { cmds.appendChild(cmdRow(c.tool, c.cmd, {})); });
+      panel.appendChild(cmds); wrap.appendChild(panel);
+    });
+  }
+
   // ---- favorites ----
   function addFav(tool, tmpl) {
     if (favs.some(function (f) { return f.tmpl === tmpl; })) return;
@@ -270,7 +284,7 @@
 
   // ---- tabs ----
   function showTab(name) {
-    ["methodology", "revshells", "dorks", "favorites"].forEach(function (t) {
+    ["methodology", "revshells", "dorks", "setup", "favorites"].forEach(function (t) {
       var sec = $("#tab-" + t); if (sec) sec.hidden = (t !== name);
       var btn = document.querySelector('.tab[data-tab="' + t + '"]'); if (btn) btn.classList.toggle("active", t === name);
     });
@@ -284,7 +298,7 @@
 
   // ---- init ----
   document.addEventListener("DOMContentLoaded", function () {
-    buildScope(); buildPhases(); buildRevshells(); buildDorks(); buildFavorites();
+    buildScope(); buildPhases(); buildRevshells(); buildDorks(); buildSetup(); buildFavorites();
     rerender(); updateProgress(); updateFavCount();
     document.querySelectorAll(".tab").forEach(function (b) { b.addEventListener("click", function () { showTab(b.dataset.tab); }); });
     showTab(LS.get(K.tab, "methodology"));
