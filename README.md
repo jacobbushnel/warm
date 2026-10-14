@@ -1,7 +1,7 @@
 # WARM — Web App Rapid Methodology
 
-A scoped, **copy-first** web-app penetration-testing methodology, as a small localhost web app.
-Walk a 9-phase workflow (recon → logic), tick items as you go, keep per-phase findings, and
+Web-app penetration-testing methodology, as a small localhost web app.
+9-phase workflow (recon → logic), tick items as you go, keep per-phase findings, and
 export a Markdown report. Every command templates from a central **Scope panel** so it comes out
 correctly scoped to your target, tester IP, and listener port.
 
@@ -10,9 +10,9 @@ correctly scoped to your target, tester IP, and listener port.
 
 ## Features
 
-Four tabs, all copy-only:
+Four tabs:
 
-- **Methodology** — a manual-first workflow (phases `00`–`16`): a per-target game plan, recon, a
+- **Methodology** — a web-app testing workflow (phases `00`–`16`): a per-target game plan, recon, a
   **Find Info in Files** pass (harvest + triage JS, source, config, docs, secrets), auth/session,
   access control, then a class-by-class attack path — SQLi, XSS, command injection, file inclusion,
   XXE, SSTI, SSRF, file upload, other injection/logic, and config disclosure — closing with a
