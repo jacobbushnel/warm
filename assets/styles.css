@@ -58,6 +58,14 @@ button:focus-visible,summary:focus-visible,input:focus-visible,textarea:focus-vi
   background:color-mix(in srgb,var(--warn) 14%,var(--surface));border:1px solid color-mix(in srgb,var(--warn) 45%,var(--border));color:var(--fg)}
 .scope-warn.show{display:block}
 .scope-warn b{color:var(--warn)}
+/* ---- multi-target list field ---- */
+.scope-list{display:flex;flex-direction:column;gap:5px}
+.scope-item{display:flex;align-items:center;gap:7px}
+.scope-item input[type=text]{flex:1;min-width:0}
+.scope-item .focus-radio{flex:none;width:15px;height:15px;accent-color:var(--accent,#5bc8bd);cursor:pointer}
+.scope-item .cbtn.rm{flex:none;padding:5px 9px;line-height:1}
+.scope-item.add input{opacity:.85}
+.focus-current{font-family:var(--mono);font-size:11px;color:var(--accent,#5bc8bd);margin-top:5px;word-break:break-all}
 
 /* ---- phases ---- */
 .main{min-width:0;display:flex;flex-direction:column;gap:14px}

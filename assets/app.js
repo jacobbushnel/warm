@@ -8,13 +8,30 @@
     get: function (k, d) { try { var v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
     set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
   };
-  var K = { vars: "warm-vars", checks: "warm-checks", notes: "warm-notes", favs: "warm-favs", theme: "warm-theme", tab: "warm-tab", engine: "warm-engine" };
+  var K = { vars: "warm-vars", checks: "warm-checks", notes: "warm-notes", favs: "warm-favs", theme: "warm-theme", tab: "warm-tab", engine: "warm-engine", lists: "warm-lists" };
 
   var vars = LS.get(K.vars, {});
   var checks = LS.get(K.checks, {});
   var notes = LS.get(K.notes, {});
   var favs = LS.get(K.favs, []);
   M.variables.forEach(function (v) { if (vars[v.key] == null) vars[v.key] = v.def || ""; });
+
+  // ---- multi-target lists (e.g. Target URLs / IPs): keep a list per field + a focused index.
+  // vars[key] always mirrors the FOCUSED entry, so all {var} templating / report / scope guard are unchanged.
+  var lists = LS.get(K.lists, {});
+  M.variables.forEach(function (v) {
+    if (!v.list) return;
+    if (!lists[v.key] || !Array.isArray(lists[v.key].items)) {
+      var seed = (vars[v.key] || "").split(/[\n,]+/).map(function (s) { return s.trim(); }).filter(Boolean);
+      lists[v.key] = { items: seed, focus: 0 };
+    }
+    if (lists[v.key].focus >= lists[v.key].items.length) lists[v.key].focus = Math.max(0, lists[v.key].items.length - 1);
+    syncFocus(v.key);
+  });
+  LS.set(K.lists, lists); LS.set(K.vars, vars);
+
+  function syncFocus(key) { var L = lists[key]; if (L) vars[key] = L.items[L.focus] || ""; }
+  function persistList(key) { syncFocus(key); LS.set(K.lists, lists); LS.set(K.vars, vars); }
 
   var $ = function (s, r) { return (r || document).querySelector(s); };
   function el(t, c, x) { var e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; }
@@ -66,6 +83,7 @@
   function buildScope() {
     var box = $("#scope-fields"); box.innerHTML = "";
     M.variables.forEach(function (v) {
+      if (v.list) { box.appendChild(buildListField(v)); if (v.guard) box.appendChild(scopeWarnEl()); return; }
       var f = el("div", "field");
       var lab = el("label", null, v.label); lab.setAttribute("for", "v-" + v.key); f.appendChild(lab);
       var input = v.multi ? el("textarea") : el("input");
@@ -77,6 +95,40 @@
     });
   }
   function scopeWarnEl() { var w = el("div", "scope-warn"); w.id = "scope-warn"; return w; }
+
+  // ---- list field: multiple targets + a focused one (◉) ----
+  function buildListField(v) {
+    var L = lists[v.key], f = el("div", "field listfield");
+    f.appendChild(el("label", null, v.label));
+    var wrap = el("div", "scope-list");
+    L.items.forEach(function (item, i) {
+      var row = el("div", "scope-item");
+      var rb = el("input"); rb.type = "radio"; rb.name = "focus-" + v.key; rb.className = "focus-radio";
+      rb.checked = (i === L.focus); rb.title = "Focus this one";
+      rb.addEventListener("change", function () { L.focus = i; persistList(v.key); rerender(); buildScope(); });
+      row.appendChild(rb);
+      var inp = el("input"); inp.type = "text"; inp.value = item; inp.placeholder = v.placeholder || "";
+      inp.addEventListener("input", function () { L.items[i] = inp.value; persistList(v.key); rerender(); });
+      row.appendChild(inp);
+      var rm = el("button", "cbtn rm", "×"); rm.type = "button"; rm.title = "Remove";
+      rm.addEventListener("click", function () {
+        L.items.splice(i, 1);
+        if (i < L.focus) L.focus--;                                  // keep the same entry focused
+        if (L.focus >= L.items.length) L.focus = Math.max(0, L.items.length - 1);
+        persistList(v.key); rerender(); buildScope();
+      });
+      row.appendChild(rm); wrap.appendChild(row);
+    });
+    var addRow = el("div", "scope-item add");
+    var ai = el("input"); ai.type = "text"; ai.placeholder = "+ add " + (v.label || v.key).replace(/ \(.*\)$/, "");
+    var add = function () { var val = ai.value.trim(); if (!val) return; L.items.push(val); if (L.items.length === 1) L.focus = 0; persistList(v.key); rerender(); buildScope(); };
+    ai.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); add(); } });
+    var ab = el("button", "cbtn", "Add"); ab.type = "button"; ab.addEventListener("click", add);
+    addRow.appendChild(ai); addRow.appendChild(ab); wrap.appendChild(addRow);
+    f.appendChild(wrap);
+    f.appendChild(el("div", "focus-current", "◉ focused: " + (L.items[L.focus] || "(none — add a target)")));
+    return f;
+  }
 
   // ---- shared command row ----
   function cmdRow(tool, tmpl, opts) {
@@ -263,8 +315,11 @@
     var r = resolved(), L = [];
     L.push("# WARM — Assessment Report", "");
     L.push("- Date: " + new Date().toISOString());
-    L.push("- Target URL: " + (r.target_url || "(none)"));
-    L.push("- Target IP: " + (r.target_ip || "(none)"));
+    L.push("- Focused URL: " + (r.target_url || "(none)"));
+    L.push("- Focused IP: " + (r.target_ip || "(none)"));
+    var uL = lists.target_url, iL = lists.target_ip;
+    if (uL && uL.items.length > 1) L.push("- All target URLs: " + uL.items.map(function (u, i) { return u + (i === uL.focus ? " (focused)" : ""); }).join(", "));
+    if (iL && iL.items.length > 1) L.push("- All target IPs: " + iL.items.map(function (p, i) { return p + (i === iL.focus ? " (focused)" : ""); }).join(", "));
     L.push("- Authorized scope: " + (scopeList().join(", ") || "(none set)"));
     L.push("- Tester IP(s): " + (r.tester_ip || "(none)") + " · listener port: " + (r.tester_port || "(none)"));
     L.push("");

