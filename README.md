@@ -12,7 +12,18 @@ correctly scoped to your target, tester IP, and listener port.
 
 Four tabs:
 
-- **Methodology** — a web-app testing workflow (phases `00`–`16`): a per-target game plan, recon, a
+- **Two-tier items (discover → exploit)** — a method item first shows the **Discover / confirm**
+  tests, then a nested **"Exploit → gain access / escalate"** dropdown with the advanced payloads
+  for *doing something* with the bug once found (not just `alert(1)` / `{{7*7}}`). XSS is built out
+  first — including the "a bot visits but won't click" case: your injected JS acts in the bot's
+  session via `fetch` (read a page, submit with a scraped CSRF token, take over the account). The
+  JavaScript-for-XSS primer is in [`scripts/payloads/xss-exploitation.md`](scripts/payloads/xss-exploitation.md).
+- **Screenshots per phase** — attach evidence to each phase's findings (click **+ Add** or
+  paste an image straight into the notes box). Thumbnails get captions, persist in the browser
+  (IndexedDB, so large images are fine), and are **embedded inline in the HTML report export**
+  (`Export report + shots`) — open it and print to PDF, or paste into your Word/LibreOffice doc.
+  The `Export .md` button still writes the Markdown skeleton (with screenshot captions listed).
+- **Methodology** — a manual-first workflow (phases `00`–`16`): a per-target game plan, recon, a
   **Find Info in Files** pass (harvest + triage JS, source, config, docs, secrets), auth/session,
   access control, then a class-by-class attack path — SQLi, XSS, command injection, file inclusion,
   XXE, SSTI, SSRF, file upload, other injection/logic, and config disclosure — closing with a
@@ -75,6 +86,11 @@ warm/
 │  ├─ app.js             # rendering, scoping, copy, favorites, report export
 │  └─ styles.css         # theme tokens + layout
 ├─ scripts/
+│  ├─ xss-filter-probe.sh # report which chars a field strips (step 0 of a filtered XSS)
+│  ├─ cms-scan.sh        # detect CMS (WordPress/Joomla/Drupal) + run the right enumerator + attack path
+│  ├─ login-enum.sh      # user-enum oracle -> valid users -> fast ffuf password brute
+│  ├─ csrf-gen.sh        # build a CSRF PoC (form + fetch) for an emulated/admin user to visit
+│  ├─ ride-session.sh    # use a stolen cookie: probe admin pages, grep the flag, authed loop
 │  ├─ target-recon.sh    # one-shot per-target opening: fingerprint+discovery+NSE+JS harvest
 │  ├─ inject-probe.sh    # auto SQLi break-out boundary + DBMS finder (local, no-AI)
 │  ├─ ssti-probe.sh      # detect SSTI + identify engine, print the RCE one-liner
@@ -93,7 +109,7 @@ warm/
 │  ├─ lfi-probe.sh       # fire traversal / PHP-wrapper / log-poison vectors at one param
 │  ├─ users.txt          # generic username starter list
 │  └─ payloads/          # copy-paste cheat sheets: sqli, xss, ssti, lfi, cmdi, xxe, ssrf,
-│                        #   upload, auth, idor, revshells, magic-hashes, + tips.md (war-room ref)
+│                        #   upload, auth, idor, revshells, magic-hashes, deserialization, + tips.md & runbook.md (war-room ref + engagement runbook)
 ├─ serve.sh              # ./serve.sh [port]  (binds 127.0.0.1)
 ├─ loot/                 # suggested output dir for your tool runs (gitignored)
 └─ README.md

