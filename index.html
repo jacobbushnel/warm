@@ -20,7 +20,9 @@
     <div class="top-actions">
       <span class="count" id="count">0 / 0</span>
       <div class="bar"><i id="barfill"></i></div>
-      <button class="ghost" id="export" type="button">Export report</button>
+      <button class="ghost" id="export" type="button">Export .md</button>
+      <button class="ghost" id="export-html" type="button">Export report + shots</button>
+      <button class="ghost" id="export-targets" type="button" title="Download target_urls.txt + target_ips.txt for the recon scripts">Export targets</button>
       <button class="ghost" id="theme" type="button">Theme: system</button>
       <button class="ghost" id="reset" type="button">Reset</button>
     </div>
@@ -30,7 +32,7 @@
 <div class="layout">
   <aside class="scope">
     <h2>Scope &amp; variables</h2>
-    <p class="hint">These fill every command live. Set the Target URL + IP; an authorized-scope list (optional) flags out-of-scope targets without blocking.</p>
+    <p class="hint">These fill every command live. Add all your Target URLs/IPs and click ◉ to focus one — every command templates from the focused target, so a multi-target engagement needs no scope notes elsewhere. The authorized-scope list (optional) flags out-of-scope targets without blocking.</p>
     <div id="scope-fields"></div>
   </aside>
 

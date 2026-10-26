@@ -1,0 +1,16 @@
+admin
+administrator
+root
+user
+test
+guest
+operator
+support
+service
+webmaster
+info
+contact
+demo
+dev
+staff
+manager

