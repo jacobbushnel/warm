@@ -88,6 +88,8 @@ window.METHODOLOGY = {
           tell: "Headers, cookie names, error-page style tell you the framework — which decides which bugs matter. PHP→LFI/type-juggle; Java→XXE/deser/EL; Python/Ruby/Node→SSTI/proto.",
           cmds: [
             { tool: "target-recon", cmd: "scripts/target-recon.sh {target_url} {target_host}   # one-shot: fingerprint+discovery+NSE+JS harvest into loot/<t>/recon/" },
+            { tool: "recon-all", cmd: "scripts/recon-all.sh   # run the above against EVERY target in target_urls.txt (one loot/<host>/ each)" },
+            { note: true, tool: "multi-target", cmd: "Whole scope at once: header 'Export targets' writes target_urls.txt + target_ips.txt from your Scope lists (or scripts/make-target-lists.sh scope.txt). Then recon-all.sh, or run-targets.sh <list> '<cmd {t}>' to loop any tool." },
             { tool: "whatweb", cmd: "whatweb -a 3 {target_url}" },
             { tool: "httpx-toolkit", cmd: "httpx-toolkit -u {target_url} -title -tech-detect -status-code -web-server -ip" },
             { tool: "curl",    cmd: "curl -s -I {target_url}/" },

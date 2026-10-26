@@ -488,6 +488,16 @@
       var host = (resolved().target_host || "target").replace(/[^\w.-]/g, "_");
       download("warm-report-" + host + "-" + Date.now() + ".html", buildReportHTML(), "text/html");
     });
+    // export the Scope target lists as flat files the recon scripts iterate (one per line)
+    $("#export-targets").addEventListener("click", function () {
+      var uL = lists.target_url, iL = lists.target_ip;
+      var urls = (uL && uL.items ? uL.items : []).map(function (s) { return String(s).trim(); }).filter(Boolean);
+      var ips = (iL && iL.items ? iL.items : []).map(function (s) { return String(s).trim(); }).filter(Boolean);
+      if (!urls.length && !ips.length) { window.alert("No targets in Scope yet. Add Target URLs/IPs first."); return; }
+      if (urls.length) download("target_urls.txt", urls.join("\n") + "\n", "text/plain");
+      if (ips.length) setTimeout(function () { download("target_ips.txt", ips.join("\n") + "\n", "text/plain"); }, 350);
+      window.alert("Saved " + urls.length + " URL(s) + " + ips.length + " IP(s).\nMove them into your warm/ dir, then:\n  ./scripts/recon-all.sh            # recon every URL\n  ./scripts/run-targets.sh target_ips.txt 'nmap -sV {t}'");
+    });
     $("#theme").addEventListener("click", function () {
       theme = theme === "system" ? "light" : theme === "light" ? "dark" : "system";
       LS.set(K.theme, theme); applyTheme(theme); $("#theme").textContent = "Theme: " + theme;

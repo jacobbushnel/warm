@@ -86,6 +86,9 @@ warm/
 │  ├─ app.js             # rendering, scoping, copy, favorites, report export
 │  └─ styles.css         # theme tokens + layout
 ├─ scripts/
+│  ├─ make-target-lists.sh # split a mixed scope sheet into target_urls.txt + target_ips.txt
+│  ├─ run-targets.sh     # run any command/script once per target in a list ({t} placeholder)
+│  ├─ recon-all.sh       # run the opening recon against every URL in target_urls.txt
 │  ├─ xss-filter-probe.sh # report which chars a field strips (step 0 of a filtered XSS)
 │  ├─ cms-scan.sh        # detect CMS (WordPress/Joomla/Drupal) + run the right enumerator + attack path
 │  ├─ login-enum.sh      # user-enum oracle -> valid users -> fast ffuf password brute
@@ -142,6 +145,27 @@ python3 scripts/catch-server.py 9001
 
 The `payloads/` cheat sheets mirror the methodology phases for quick copy-paste when you want the
 full set rather than the few shown in the app.
+
+### Recon the whole scope at once
+
+`target_url` / `target_ip` in the Scope panel are multi-target lists. To run recon across the
+*whole* engagement rather than the focused target:
+
+```bash
+# 1. get the two list files. Either:
+#    a) in WARM, click "Export targets" -> saves target_urls.txt + target_ips.txt, or
+#    b) split a scope sheet on the CLI (URLs, bare hosts, IPs, CIDRs all sorted out):
+./scripts/make-target-lists.sh scope.txt      # or: pbpaste | ./scripts/make-target-lists.sh
+
+# 2. run the opening recon against every URL, each into its own loot/<host>/ folder:
+./scripts/recon-all.sh                         # PARALLEL=3 ./scripts/recon-all.sh to fan out
+
+# run ANY command/script over a list — {t} is replaced by each target:
+./scripts/run-targets.sh target_ips.txt  'nmap -sV -T4 {t}'
+./scripts/run-targets.sh target_urls.txt './scripts/files-recon.sh {t}'
+```
+
+Sequential by default (flaky boxes drop requests under parallel load); set `PARALLEL=N` to opt in.
 
 ## Scope & authorization
 

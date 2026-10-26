@@ -33,3 +33,5 @@ construction/
 *_wordlist.txt
 target_wordlist.txt
 whatshell.sh
+target_urls.txt
+target_ips.txt
