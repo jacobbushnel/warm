@@ -50,7 +50,21 @@
       <p class="lede">A scoped, copy-first assessment workflow. Tick items as you work, keep notes per phase,
         and export a Markdown report. Commands template from the Scope panel — unfilled <code>{variables}</code>
         are highlighted. Hit <b>☆</b> to save any command to Favorites. Nothing runs from this page.</p>
+      <details class="tree board" id="board" open>
+        <summary><h2>Engagement board — flags &amp; evidence</h2><span id="board-tally" class="board-tally"></span></summary>
+        <p class="sub">One row per target from your Scope list. Track local.txt / proof.txt, the vuln class that got each,
+          and whether it's screenshotted. Drives the per-target report export. Add targets in the Scope panel.</p>
+        <div id="board-body"></div>
+      </details>
+
       <div id="phases"></div>
+
+      <div class="tree planner" id="triage-planner">
+        <h2>Where do I start? — surface triage</h2>
+        <p class="sub">Pick what stands out on the target; get the likely chain, the first move, and a jump to the phase. Beats staring at a box deciding what to try.</p>
+        <div class="planner-inputs" id="triage-inputs"></div>
+        <div class="planner-out" id="triage-out"></div>
+      </div>
 
       <div class="tree planner" id="xss-planner">
         <h2>XSS → impact — planner</h2>

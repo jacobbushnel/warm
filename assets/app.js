@@ -8,12 +8,13 @@
     get: function (k, d) { try { var v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
     set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
   };
-  var K = { vars: "warm-vars", checks: "warm-checks", notes: "warm-notes", favs: "warm-favs", theme: "warm-theme", tab: "warm-tab", engine: "warm-engine", lists: "warm-lists" };
+  var K = { vars: "warm-vars", checks: "warm-checks", notes: "warm-notes", favs: "warm-favs", theme: "warm-theme", tab: "warm-tab", engine: "warm-engine", lists: "warm-lists", flags: "warm-flags" };
 
   var vars = LS.get(K.vars, {});
   var checks = LS.get(K.checks, {});
   var notes = LS.get(K.notes, {});
   var favs = LS.get(K.favs, []);
+  var flagsData = LS.get(K.flags, {});   // { "<target url>": { local:{done,vuln,flag}, proof:{done,vuln,flag} } }
   M.variables.forEach(function (v) { if (vars[v.key] == null) vars[v.key] = v.def || ""; });
 
   // ---- multi-target lists (e.g. Target URLs / IPs): keep a list per field + a focused index.
@@ -31,7 +32,7 @@
   LS.set(K.lists, lists); LS.set(K.vars, vars);
 
   function syncFocus(key) { var L = lists[key]; if (L) vars[key] = L.items[L.focus] || ""; }
-  function persistList(key) { syncFocus(key); LS.set(K.lists, lists); LS.set(K.vars, vars); }
+  function persistList(key) { syncFocus(key); LS.set(K.lists, lists); LS.set(K.vars, vars); if (typeof buildBoard === "function") buildBoard(); }
 
   // ---- screenshots store (IndexedDB — images are too big for localStorage) ----
   // record: { id, phase, caption, dataUrl, ts }
@@ -381,6 +382,97 @@
   function legacy(text) { var ta = el("textarea"); ta.value = text; ta.style.cssText = "position:fixed;opacity:0"; document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); } catch (e) {} document.body.removeChild(ta); }
 
   // ---- live re-render + progress ----
+  // ---- engagement board: per-target local/proof flag tracking ----
+  var VULN = ["SQLi", "XSS", "Command Injection", "LFI / Traversal", "XXE", "SSTI", "SSRF", "File Upload", "IDOR / Access", "Deserialization", "Auth / Brute", "CSRF", "Other"];
+  function flagRec(t) {
+    if (!flagsData[t]) flagsData[t] = {};
+    ["local", "proof"].forEach(function (k) { if (!flagsData[t][k]) flagsData[t][k] = { done: false, vuln: "", flag: "", shot: false }; });
+    return flagsData[t];
+  }
+  function saveFlags() { LS.set(K.flags, flagsData); updateBoardTally(); }
+  function boardTargets() { return (((lists.target_url || {}).items) || []).map(function (s) { return String(s).trim(); }).filter(Boolean); }
+  function updateBoardTally() {
+    var t = $("#board-tally"); if (!t) return;
+    var items = boardTargets(), L = 0, P = 0;
+    items.forEach(function (x) { var r = flagsData[x]; if (r) { if (r.local && r.local.done) L++; if (r.proof && r.proof.done) P++; } });
+    t.textContent = items.length ? (L + "/" + items.length + " local · " + P + "/" + items.length + " proof") : "";
+  }
+  function buildBoard() {
+    var body = $("#board-body"); if (!body) return;
+    body.innerHTML = "";
+    var items = boardTargets();
+    if (!items.length) { body.appendChild(el("p", "board-empty", "No targets yet — add Target URLs in the Scope panel and they'll appear here.")); updateBoardTally(); return; }
+    items.forEach(function (t) {
+      var rec = flagRec(t), row = el("div", "board-row");
+      row.appendChild(el("div", "board-target", t));
+      var cols = el("div", "board-flags");
+      [["local", "LOCAL.TXT"], ["proof", "PROOF.TXT"]].forEach(function (pair) {
+        var f = rec[pair[0]], cell = el("div", "board-flag" + (f.done ? " done" : ""));
+        var head = el("label", "board-flag-head");
+        var cb = el("input"); cb.type = "checkbox"; cb.checked = !!f.done;
+        cb.addEventListener("change", function () { f.done = cb.checked; cell.classList.toggle("done", cb.checked); saveFlags(); });
+        head.appendChild(cb); head.appendChild(el("span", null, pair[1])); cell.appendChild(head);
+        var vs = el("select", "select"); var ph = el("option"); ph.value = ""; ph.textContent = "vuln class…"; vs.appendChild(ph);
+        VULN.forEach(function (v) { var o = el("option"); o.value = v; o.textContent = v; if (f.vuln === v) o.selected = true; vs.appendChild(o); });
+        vs.addEventListener("change", function () { f.vuln = vs.value; saveFlags(); }); cell.appendChild(vs);
+        var fi = el("input", "board-flaginput"); fi.type = "text"; fi.placeholder = "flag value"; fi.value = f.flag || "";
+        fi.addEventListener("input", function () { f.flag = fi.value; });
+        fi.addEventListener("change", function () { f.flag = fi.value; saveFlags(); }); cell.appendChild(fi);
+        var sl = el("label", "board-shot"); var sc = el("input"); sc.type = "checkbox"; sc.checked = !!f.shot;
+        sc.addEventListener("change", function () { f.shot = sc.checked; saveFlags(); });
+        sl.appendChild(sc); sl.appendChild(el("span", null, "screenshotted")); cell.appendChild(sl);
+        cols.appendChild(cell);
+      });
+      row.appendChild(cols); body.appendChild(row);
+    });
+    updateBoardTally();
+  }
+
+  // ---- "where do I start?" surface triage ----
+  var TRIAGE = [
+    ["Comment / guestbook / status feature an admin reviews", "stored XSS → steal admin cookie / act in session → admin panel → often Twig/SSTI → RCE", "Plant a beacon; when the bot fires it, use the XSS planner (type=stored, viewer=yes).", "xss"],
+    ["Input saved, shown later to an admin, no visible reflection", "blind XSS → session/admin action", "Beacon first to learn where it fires, then act in-session.", "xss"],
+    ["\"System Info\" / \"Data submission\" / diagnostic POST", "command injection → RCE", "Intercept the POST; inject separators into each field (; | & $(), and Windows \"&).", "cmdi"],
+    ["A URL / fetch / import / CV-upload / avatar field", "SSRF → internal service / cloud metadata / create-admin API", "Confirm with a listener hit; bypass localhost with 0.0.0.0; gopher for POST.", "ssrf"],
+    ["Sequential IDs on screenshots / invoices / messages / profiles", "IDOR → other users' data → creds / next step", "Capture a request for YOUR object, swap the id, sweep the range for the admin record.", "access"],
+    ["Login form errors on a quote / dumps on ' OR 1=1", "SQLi → dump creds OR read files (id_rsa) OR OUTFILE/copy webshell", "Save the request; sqlmap -r with the * marker if it only dumps DB names.", "sqli"],
+    ["A page= / file= / ?f= param, or a path in the URL", "LFI / traversal → read source, config, id_rsa, proof", "Try ../ depth + php://filter; Spring Boot? fuzz PATH×FILE for application.properties.", "files"],
+    ["XML accepted (SOAP, import, .docx / .svg upload)", "XXE → file read / OOB exfil", "Add a DOCTYPE with a SYSTEM entity pointing at file:///etc/passwd (or your OOB dtd).", "xxe"],
+    ["Output shows {{ }} / ${ } / <%= %> math, or a template field", "SSTI → RCE", "Confirm with 7*7; fingerprint the engine; paste the matching RCE one-liner.", "ssti"],
+    ["Registration / state-change form with an anti-CSRF token", "drop/blank the token → CSRF, often chained with XSS", "Try removing the token entirely; if it needs the admin, deliver a CSRF auto-submit form.", "logic"],
+    ["Spring Boot / Java (.do, /actuator, /error whitelabel)", "traversal → application.properties / actuator → creds → RCE/deser", "Read the config via traversal; check /actuator/env,/heapdump; grep for password/secret.", "config"],
+    ["API-first app (JSON everywhere)", "mass-assignment / create-admin via API → privilege escalation", "Add &role=admin / {\"isAdmin\":true}; find hidden fields (arjun); try /api/admin/create.", "access"],
+    ["A login / brute target with words all over the site", "custom-wordlist brute (cewl), user-enum oracle → password", "cewl the site for a wordlist; ffuf the login (anchor on the success code).", "auth"]
+  ];
+  function buildTriage() {
+    var box = $("#triage-inputs"); if (!box) return;
+    box.innerHTML = "";
+    var wrap = el("label", "planner-field");
+    wrap.appendChild(el("span", "planner-lbl", "What stands out on the target?"));
+    var sel = el("select", "select"); sel.id = "triage-sel";
+    var ph = el("option"); ph.value = ""; ph.textContent = "— pick the surface you see —"; sel.appendChild(ph);
+    TRIAGE.forEach(function (t, i) { var o = el("option"); o.value = i; o.textContent = t[0]; sel.appendChild(o); });
+    sel.addEventListener("change", function () { renderTriage(sel.value); });
+    wrap.appendChild(sel); box.appendChild(wrap);
+  }
+  function renderTriage(idx) {
+    var out = $("#triage-out"); if (!out) return;
+    out.innerHTML = "";
+    if (idx === "" || idx == null) return;
+    var t = TRIAGE[+idx]; if (!t) return;
+    var s1 = el("div", "step"); s1.appendChild(el("div", "q", "Likely chain")); s1.appendChild(el("div", "a", t[1])); out.appendChild(s1);
+    var s2 = el("div", "step"); s2.appendChild(el("div", "q", "First move")); s2.appendChild(el("div", "a", t[2])); out.appendChild(s2);
+    var ph = M.phases.find(function (p) { return p.id === t[3]; });
+    if (ph) {
+      var go = el("button", "ghost pri", "Go to phase " + ph.num + " · " + ph.title); go.type = "button";
+      go.addEventListener("click", function () {
+        var d = document.querySelector('details.phase[data-pi="' + M.phases.indexOf(ph) + '"]');
+        if (d) { d.open = true; d.scrollIntoView({ block: "start", behavior: "smooth" }); }
+      });
+      out.appendChild(go);
+    }
+  }
+
   // ---- XSS -> impact planner ----
   var XSP = { type: "stored", viewer: "yes", httponly: "yes", csp: "open", next: "admin" };
   var XSP_FIELDS = [
@@ -513,6 +605,23 @@
     L.push("- Authorized scope: " + (scopeList().join(", ") || "(none set)"));
     L.push("- Tester IP(s): " + (r.tester_ip || "(none)") + " · listener port: " + (r.tester_port || "(none)"));
     L.push("");
+    // per-target flag summary (lead with the deliverable)
+    var bt = boardTargets();
+    if (bt.length) {
+      L.push("## Flags", "");
+      bt.forEach(function (t) {
+        var rec = flagsData[t] || {};
+        L.push("### " + t);
+        ["local", "proof"].forEach(function (k) {
+          var f = rec[k] || {};
+          L.push("- **" + k + ".txt** — " + (f.done ? "✓ captured" : "✗ not yet") +
+            (f.vuln ? " — via " + f.vuln : "") +
+            (f.flag ? " — `" + f.flag + "`" : "") +
+            (f.done && !f.shot ? "  ⚠ no screenshot" : ""));
+        });
+        L.push("");
+      });
+    }
     M.phases.forEach(function (ph, pi) {
       L.push("## " + ph.num + " · " + ph.title);
       ph.items.forEach(function (it, ii) { L.push("- [" + (checks[cid(pi, ii)] ? "x" : " ") + "] " + it.label + (it.sev ? " (" + it.sev + ")" : "")); });
@@ -533,7 +642,8 @@
       '.meta{color:#444;font-size:13px}.meta div{margin:1px 0}ul.ck{margin:6px 0;padding-left:20px}',
       'pre.notes{white-space:pre-wrap;background:#f6f6f6;border:1px solid #e2e2e2;border-radius:6px;padding:10px}',
       'figure{margin:12px 0}img{max-width:100%;border:1px solid #ccc;border-radius:6px}',
-      'figcaption{font-size:12px;color:#555;margin-top:3px}.sev{color:#b00;font-size:11px}@media print{h2{page-break-after:avoid}figure{page-break-inside:avoid}}</style>',
+      'figcaption{font-size:12px;color:#555;margin-top:3px}.sev{color:#b00;font-size:11px}@media print{h2{page-break-after:avoid}figure{page-break-inside:avoid}}',
+      'table.flags{border-collapse:collapse;width:100%;font-size:13px;margin:6px 0}table.flags th,table.flags td{border:1px solid #ddd;padding:5px 8px;text-align:left}table.flags th{background:#f2f2f2}.ok{color:#137333;font-weight:600}.no{color:#999}.warnflag{color:#b06000}</style>',
       '</head><body>'];
     h.push('<h1>WARM — Assessment Report</h1>');
     h.push('<div class="meta"><div>Date: ' + esc2(new Date().toISOString()) + '</div>');
@@ -542,6 +652,17 @@
     if (uL && uL.items.length > 1) h.push('<div>All URLs: ' + esc2(uL.items.map(function (u, i) { return u + (i === uL.focus ? " (focused)" : ""); }).join(", ")) + '</div>');
     if (iL && iL.items.length > 1) h.push('<div>All IPs: ' + esc2(iL.items.map(function (p, i) { return p + (i === iL.focus ? " (focused)" : ""); }).join(", ")) + '</div>');
     h.push('<div>Authorized scope: ' + esc2(scopeList().join(", ") || "(none set)") + '</div></div>');
+    // per-target flag summary table
+    var bt = boardTargets();
+    if (bt.length) {
+      h.push('<h2>Flags</h2><table class="flags"><tr><th>Target</th><th>local.txt</th><th>via</th><th>proof.txt</th><th>via</th></tr>');
+      bt.forEach(function (t) {
+        var rec = flagsData[t] || {}, lf = rec.local || {}, pf = rec.proof || {};
+        function cell(f) { return f.done ? '<span class="ok">' + esc2(f.flag || "✓") + '</span>' + (f.shot ? "" : ' <span class="warnflag">(no shot)</span>') : '<span class="no">—</span>'; }
+        h.push('<tr><td>' + esc2(t) + '</td><td>' + cell(lf) + '</td><td>' + esc2(lf.vuln || "") + '</td><td>' + cell(pf) + '</td><td>' + esc2(pf.vuln || "") + '</td></tr>');
+      });
+      h.push('</table>');
+    }
     M.phases.forEach(function (ph, pi) {
       h.push('<h2>' + esc2(ph.num + " · " + ph.title) + '</h2><ul class="ck">');
       ph.items.forEach(function (it, ii) { h.push('<li>' + (checks[cid(pi, ii)] ? "☑" : "☐") + ' ' + esc2(it.label) + (it.sev ? ' <span class="sev">(' + esc2(it.sev) + ')</span>' : '') + '</li>'); });
@@ -574,7 +695,7 @@
 
   // ---- init ----
   document.addEventListener("DOMContentLoaded", function () {
-    buildScope(); buildPhases(); buildRevshells(); buildDorks(); buildSetup(); buildFavorites(); buildXssPlanner();
+    buildScope(); buildPhases(); buildRevshells(); buildDorks(); buildSetup(); buildFavorites(); buildBoard(); buildTriage(); buildXssPlanner();
     rerender(); updateProgress(); updateFavCount();
     openShotDB(function () { renderAllShots(); });  // load saved screenshots once IndexedDB is ready
     document.querySelectorAll(".tab").forEach(function (b) { b.addEventListener("click", function () { showTab(b.dataset.tab); }); });
