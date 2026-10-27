@@ -153,6 +153,19 @@ details[open] .chev{transform:rotate(90deg)}
 .step .a{font-size:13px;color:var(--muted);margin-top:4px}
 .step .a code{font-size:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:5px;padding:.5px 5px}
 
+/* xss planner */
+.planner{margin-bottom:20px}
+.planner-inputs{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-bottom:16px}
+.planner-field{display:flex;flex-direction:column;gap:4px}
+.planner-lbl{font-size:11px;font-weight:650;letter-spacing:.03em;color:var(--muted);text-transform:uppercase}
+.planner-field .select{width:100%}
+.planner-verdict{font-size:13px;line-height:1.5;border-radius:8px;padding:10px 12px;margin-bottom:14px;
+  border:1px solid var(--border);background:var(--surface-2)}
+.planner-verdict.ok{border-left:3px solid var(--accent)}
+.planner-verdict.warn{border-left:3px solid var(--warn)}
+.planner-pays{margin-top:14px}
+.planner-pays .planner-lbl{margin-bottom:6px;display:block}
+
 footer{max-width:1180px;margin:0 auto;padding:10px 20px 40px;font-family:var(--mono);font-size:12px;color:var(--muted);
   text-align:center;line-height:1.7}
 
