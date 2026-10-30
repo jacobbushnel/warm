@@ -107,9 +107,10 @@
 
     <!-- DORK SEARCH -->
     <section id="tab-dorks" hidden>
-      <p class="lede">Search a curated set of web-app pentest references at once with a <code>site:</code> dork.
-        Type a query, pick which sites to include, and open the search in a new tab. Heavy multi-site dorks can
-        trip captchas — narrow the selection or switch engines if that happens.</p>
+      <p class="lede">Search curated web-app pentest references with a <code>site:</code> dork. Type a query and
+        pick sites. <b>Search selected</b> opens one clean tab per site (<code>site:domain your query</code>) —
+        Google can't reliably apply a term across a combined <code>OR</code>, so WARM runs them separately.
+        Multiple sites open multiple tabs (allow pop-ups), or hit <b>Only</b> on a site for a single tab.</p>
       <div class="panel">
         <div class="dork-controls">
           <input id="dork-q" type="text" class="dork-q" placeholder="e.g. SSRF gopher bypass  (query is optional)">

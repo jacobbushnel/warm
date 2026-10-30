@@ -9,15 +9,15 @@
 // refs use site:<domain> inurl:<path>. def: checked by default (keep this set small; Google/Bing
 // degrade badly past ~6 ORed site: operators).
 window.DORK_SITES = [
-  { name: "HackTricks",            dork: "site:hacktricks.xyz",                               url: "https://book.hacktricks.xyz",                   def: true },
-  { name: "HackTricks Cloud",      dork: "site:cloud.hacktricks.xyz",                         url: "https://cloud.hacktricks.xyz" },
+  { name: "HackTricks",            dork: "site:hacktricks.wiki",                              url: "https://book.hacktricks.wiki" },
+  { name: "HackTricks Cloud",      dork: "site:cloud.hacktricks.wiki",                        url: "https://cloud.hacktricks.wiki" },
   { name: "PayloadsAllTheThings",  dork: "site:swisskyrepo.github.io inurl:PayloadsAllTheThings", url: "https://swisskyrepo.github.io/PayloadsAllTheThings", def: true },
   { name: "InternalAllTheThings",  dork: "site:swisskyrepo.github.io inurl:InternalAllTheThings", url: "https://swisskyrepo.github.io/InternalAllTheThings" },
   { name: "PentestMonkey",         dork: "site:pentestmonkey.net",                            url: "https://pentestmonkey.net" },
   { name: "GTFOBins",              dork: "site:gtfobins.github.io",                           url: "https://gtfobins.github.io",                    def: true },
   { name: "LOLBAS",                dork: "site:lolbas-project.github.io",                     url: "https://lolbas-project.github.io" },
   { name: "WADComs",               dork: "site:wadcoms.github.io",                            url: "https://wadcoms.github.io" },
-  { name: "OWASP Cheat Sheets",    dork: "site:cheatsheetseries.owasp.org",                   url: "https://cheatsheetseries.owasp.org",            def: true },
+  { name: "OWASP Cheat Sheets",    dork: "site:cheatsheetseries.owasp.org",                   url: "https://cheatsheetseries.owasp.org" },
   { name: "OWASP WSTG",            dork: "site:owasp.org inurl:web-security-testing-guide",   url: "https://owasp.org/www-project-web-security-testing-guide/" },
   { name: "PortSwigger Academy",   dork: "site:portswigger.net inurl:web-security",           url: "https://portswigger.net/web-security",          def: true },
   { name: "ired.team",             dork: "site:ired.team",                                    url: "https://www.ired.team" },

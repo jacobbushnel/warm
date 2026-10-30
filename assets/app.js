@@ -338,22 +338,30 @@
     $("#dork-go").onclick = function () {
       var picked = [].filter.call(document.querySelectorAll("#dork-sites input:checked"), function () { return true; })
         .map(function (c) { return c.dataset.dork; });
-      if (!picked.length) { flashHint("Select at least one site."); return; }
-      if (picked.length > 6) flashHint("Opened — but " + picked.length + " sites ORed can thin results; 3–6 works best.");
-      openDork(picked);
+      var q = ($("#dork-q").value || "").trim();
+      if (!picked.length && !q) { flashHint("Pick a site or type a query."); return; }
+      // one clean search PER site (site:domain term) — a combined "(site:a OR site:b) term"
+      // query is mishandled by Google and returns nothing, so we don't build it.
+      var dorks = picked.length ? picked : [""];
+      openDork(dorks);
+      if (dorks.length > 1) flashHint("Opening " + dorks.length + " tabs (one per site). If only one opens, allow pop-ups — or use ‘Only’ for a single site.");
     };
     $("#dork-q").addEventListener("keydown", function (e) { if (e.key === "Enter") $("#dork-go").click(); });
   }
   function toggleSites(on) { document.querySelectorAll("#dork-sites input[type=checkbox]").forEach(function (c) { c.checked = on; }); }
-  function openDork(dorks) {
+  function dorkUrl(dork) {
     var e = ENGINES[$("#dork-engine").value || 0] || ENGINES[0];
     var q = ($("#dork-q").value || "").trim();
-    var sitePart = dorks.length ? "(" + dorks.join(" OR ") + ") " : "";
-    var full = (sitePart + q).trim();
-    if (!full) { flashHint("Nothing to search — pick a site or type a query."); return; }
-    // anchor-click opens a real new tab reliably (window.open with a feature string can be popup-blocked)
-    var a = el("a"); a.href = e.base + encodeURIComponent(full); a.target = "_blank"; a.rel = "noopener noreferrer";
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    var full = ((dork ? dork + " " : "") + q).trim();   // e.g. "site:gtfobins.github.io reverse shell"
+    return full ? e.base + encodeURIComponent(full) : null;
+  }
+  function openDork(dorks) {
+    // one tab per site — reliable, vs a combined OR query Google can't apply a term across.
+    dorks.forEach(function (d) {
+      var url = dorkUrl(d); if (!url) return;
+      var a = el("a"); a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    });
   }
   function flashHint(msg) { var h = $("#dork-hint"); h.textContent = msg; h.classList.add("show"); setTimeout(function () { h.classList.remove("show"); }, 2200); }
 
