@@ -5,18 +5,21 @@
 
 /* Curated web-app pentest / security reference sites.
  * `dork` is the site: expression used in search; `url` is the direct link. */
+// dork: must be a VALID search operator. site: takes a DOMAIN only (no path) — path-scoped
+// refs use site:<domain> inurl:<path>. def: checked by default (keep this set small; Google/Bing
+// degrade badly past ~6 ORed site: operators).
 window.DORK_SITES = [
-  { name: "HackTricks",            dork: "site:hacktricks.xyz",                               url: "https://book.hacktricks.xyz" },
+  { name: "HackTricks",            dork: "site:hacktricks.xyz",                               url: "https://book.hacktricks.xyz",                   def: true },
   { name: "HackTricks Cloud",      dork: "site:cloud.hacktricks.xyz",                         url: "https://cloud.hacktricks.xyz" },
-  { name: "PayloadsAllTheThings",  dork: "site:github.com/swisskyrepo/PayloadsAllTheThings",  url: "https://github.com/swisskyrepo/PayloadsAllTheThings" },
-  { name: "InternalAllTheThings",  dork: "site:swisskyrepo.github.io/InternalAllTheThings",   url: "https://swisskyrepo.github.io/InternalAllTheThings" },
+  { name: "PayloadsAllTheThings",  dork: "site:swisskyrepo.github.io inurl:PayloadsAllTheThings", url: "https://swisskyrepo.github.io/PayloadsAllTheThings", def: true },
+  { name: "InternalAllTheThings",  dork: "site:swisskyrepo.github.io inurl:InternalAllTheThings", url: "https://swisskyrepo.github.io/InternalAllTheThings" },
   { name: "PentestMonkey",         dork: "site:pentestmonkey.net",                            url: "https://pentestmonkey.net" },
-  { name: "GTFOBins",              dork: "site:gtfobins.github.io",                           url: "https://gtfobins.github.io" },
+  { name: "GTFOBins",              dork: "site:gtfobins.github.io",                           url: "https://gtfobins.github.io",                    def: true },
   { name: "LOLBAS",                dork: "site:lolbas-project.github.io",                     url: "https://lolbas-project.github.io" },
   { name: "WADComs",               dork: "site:wadcoms.github.io",                            url: "https://wadcoms.github.io" },
-  { name: "OWASP Cheat Sheets",    dork: "site:cheatsheetseries.owasp.org",                   url: "https://cheatsheetseries.owasp.org" },
-  { name: "OWASP WSTG",            dork: "site:owasp.org/www-project-web-security-testing-guide", url: "https://owasp.org/www-project-web-security-testing-guide/" },
-  { name: "PortSwigger Academy",   dork: "site:portswigger.net/web-security",                 url: "https://portswigger.net/web-security" },
+  { name: "OWASP Cheat Sheets",    dork: "site:cheatsheetseries.owasp.org",                   url: "https://cheatsheetseries.owasp.org",            def: true },
+  { name: "OWASP WSTG",            dork: "site:owasp.org inurl:web-security-testing-guide",   url: "https://owasp.org/www-project-web-security-testing-guide/" },
+  { name: "PortSwigger Academy",   dork: "site:portswigger.net inurl:web-security",           url: "https://portswigger.net/web-security",          def: true },
   { name: "ired.team",             dork: "site:ired.team",                                    url: "https://www.ired.team" },
   { name: "revshells.com",         dork: "site:revshells.com",                                url: "https://www.revshells.com" },
   { name: "Exploit-DB",            dork: "site:exploit-db.com",                               url: "https://www.exploit-db.com" }

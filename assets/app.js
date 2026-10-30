@@ -209,10 +209,24 @@
         meta.appendChild(lbl);
         if (it.tell) meta.appendChild(el("div", "tell", it.tell));
         head.appendChild(meta); item.appendChild(head);
+        var cmdList = it.cmds || [];
+        var inlineN = cmdList.length > 2 ? 1 : cmdList.length;   // show the first test; collapse the rest
         var cmds = el("div", "cmds");
         if (it.exploit && it.exploit.length) cmds.appendChild(el("div", "tier-label", "Discover / confirm"));
-        (it.cmds || []).forEach(function (c) { cmds.appendChild(cmdRow(c.tool, c.cmd, { note: c.note })); });
+        cmdList.slice(0, inlineN).forEach(function (c) { cmds.appendChild(cmdRow(c.tool, c.cmd, { note: c.note })); });
         item.appendChild(cmds);
+        var hidden = cmdList.slice(inlineN);
+        if (hidden.length) {
+          var more = el("details", "more");
+          var msum = el("summary", "more-sum");
+          msum.appendChild(el("span", "exploit-chev", "›"));
+          msum.appendChild(el("span", "more-title", "more tests"));
+          msum.appendChild(el("span", "exploit-count", String(hidden.length)));
+          more.appendChild(msum);
+          var mbody = el("div", "cmds");
+          hidden.forEach(function (c) { mbody.appendChild(cmdRow(c.tool, c.cmd, { note: c.note })); });
+          more.appendChild(mbody); item.appendChild(more);
+        }
         // nested second tier: what to actually DO with the bug once found
         if (it.exploit && it.exploit.length) {
           var ex = el("details", "exploit");
@@ -309,7 +323,7 @@
     var list = $("#dork-sites"); list.innerHTML = "";
     SITES.forEach(function (s, i) {
       var row = el("div", "site");
-      var cb = el("input"); cb.type = "checkbox"; cb.checked = true; cb.id = "site-" + i; cb.dataset.dork = s.dork;
+      var cb = el("input"); cb.type = "checkbox"; cb.checked = !!s.def; cb.id = "site-" + i; cb.dataset.dork = s.dork;
       row.appendChild(cb);
       var nm = el("label", "site-name", s.name); nm.setAttribute("for", "site-" + i); row.appendChild(nm);
       var only = el("button", "cbtn", "Only"); only.type = "button"; only.title = "Search just this site";
@@ -325,6 +339,7 @@
       var picked = [].filter.call(document.querySelectorAll("#dork-sites input:checked"), function () { return true; })
         .map(function (c) { return c.dataset.dork; });
       if (!picked.length) { flashHint("Select at least one site."); return; }
+      if (picked.length > 6) flashHint("Opened — but " + picked.length + " sites ORed can thin results; 3–6 works best.");
       openDork(picked);
     };
     $("#dork-q").addEventListener("keydown", function (e) { if (e.key === "Enter") $("#dork-go").click(); });
@@ -335,7 +350,10 @@
     var q = ($("#dork-q").value || "").trim();
     var sitePart = dorks.length ? "(" + dorks.join(" OR ") + ") " : "";
     var full = (sitePart + q).trim();
-    window.open(e.base + encodeURIComponent(full), "_blank", "noopener");
+    if (!full) { flashHint("Nothing to search — pick a site or type a query."); return; }
+    // anchor-click opens a real new tab reliably (window.open with a feature string can be popup-blocked)
+    var a = el("a"); a.href = e.base + encodeURIComponent(full); a.target = "_blank"; a.rel = "noopener noreferrer";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
   }
   function flashHint(msg) { var h = $("#dork-hint"); h.textContent = msg; h.classList.add("show"); setTimeout(function () { h.classList.remove("show"); }, 2200); }
 
